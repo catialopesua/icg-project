@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="UTF-8">
+        <title>Birthday Boy — Three.js Scene</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,500,0,0" rel="stylesheet" />
+        <link rel="stylesheet" href="src/css/styles.css" />
+        <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+
+        <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.154.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.154.0/examples/jsm/"
+            }
+        }
+        </script>
+</head>
+<body>
+    <div id="ui-top">
+        <section class="quest-card" aria-live="polite">
+            <div class="quest-head">
+                <span class="quest-orb" aria-hidden="true">◎</span>
+                <div>
+                    <span class="quest-label">Current Quest</span>
+                    <strong id="quest-main-text" class="quest-main">Find Sarah</strong>
+                </div>
+                <button id="quest-hint-toggle" class="chip-action" type="button" aria-expanded="false" aria-controls="quest-hint-panel"><span class="material-symbols-rounded" aria-hidden="true">lightbulb</span><span>Hint (H)</span></button>
+            </div>
+            <div id="quest-hint-panel" class="quest-hint hidden" role="region" aria-label="Quest hint details">
+                <p class="hint-location">📍 Location: Park</p>
+                <p class="hint-detail">💡 Look for her under the big oak tree near the fountain</p>
+            </div>
+        </section>
+    </div>
+
+    <div id="tool-dock" aria-label="Game controls">
+        <div class="tool-item">
+            <button id="weather-toggle" class="tool-btn weather" type="button" aria-expanded="false" aria-controls="weather-panel" aria-label="Weather (C)"><span class="material-symbols-rounded tool-icon" aria-hidden="true">cloud</span></button>
+            <span class="tool-key">C</span>
+        </div>
+        <div class="tool-item">
+            <button id="friends-toggle" class="tool-btn friends" type="button" aria-expanded="false" aria-controls="friends-panel" aria-label="Folders (V)"><span class="material-symbols-rounded tool-icon" aria-hidden="true">folder_open</span></button>
+            <span class="tool-key">V</span>
+        </div>
+        <div class="tool-item">
+            <button id="settings-toggle" class="tool-btn settings" type="button" aria-expanded="false" aria-controls="settings-panel" aria-label="Definitions (B)"><span class="material-symbols-rounded tool-icon" aria-hidden="true">settings</span></button>
+            <span class="tool-key">B</span>
+        </div>
+        <div class="tool-item">
+            <button id="help-toggle" class="tool-btn help" type="button" aria-expanded="false" aria-controls="help-panel" aria-label="Question mark help (N)"><span class="material-symbols-rounded tool-icon" aria-hidden="true">help</span></button>
+            <span class="tool-key">N</span>
+        </div>
+    </div>
+
+    <div id="ui-panels" aria-live="polite">
+        <section id="weather-panel" class="floating-panel hidden" role="dialog" aria-label="Weather control">
+            <div class="panel-title-row">
+                <h2>🌤 Weather Control</h2>
+                <button class="panel-close" type="button" data-close-panel="weather-panel" aria-label="Close weather panel">✕</button>
+            </div>
+            <p class="panel-badge">Unlocked 2 of 5 weather effects</p>
+            <p class="panel-note">Find Tim's friends to unlock special weather effects. Each friend brings their own unique weather.</p>
+            <div class="weather-options">
+                <button class="weather-option active" type="button" data-weather="sunny">
+                    <span class="option-icon">☀️</span>
+                    <span><strong>Sunny Day</strong><small>Click to activate</small></span>
+                </button>
+                <button class="weather-option" type="button" data-weather="night">
+                    <span class="option-icon">🌙</span>
+                    <span><strong>Night Sky</strong><small>Click to activate</small></span>
+                </button>
+                <button class="weather-option locked" type="button" disabled aria-disabled="true"><span class="option-icon">🔒</span><span><strong>???</strong><small>Find a friend to unlock</small></span></button>
+                <button class="weather-option locked" type="button" disabled aria-disabled="true"><span class="option-icon">🔒</span><span><strong>???</strong><small>Find a friend to unlock</small></span></button>
+                <button class="weather-option locked" type="button" disabled aria-disabled="true"><span class="option-icon">🔒</span><span><strong>???</strong><small>Find a friend to unlock</small></span></button>
+            </div>
+        </section>
+
+        <section id="friends-panel" class="floating-panel hidden" role="dialog" aria-label="Tim's friends">
+            <div class="panel-title-row">
+                <h2>🎈 Tim's Friends</h2>
+                <button class="panel-close" type="button" data-close-panel="friends-panel" aria-label="Close friends panel">✕</button>
+            </div>
+            <p id="friends-found-count" class="panel-badge">Found 1 of 5 friends</p>
+            <div id="friends-list" class="friends-list"></div>
+        </section>
+
+        <section id="settings-panel" class="floating-panel hidden" role="dialog" aria-label="Game settings">
+            <div class="panel-title-row">
+                <h2>⚙ Game Settings</h2>
+                <button class="panel-close" type="button" data-close-panel="settings-panel" aria-label="Close settings panel">✕</button>
+            </div>
+            <div class="setting-row">
+                <div>
+                    <h3>Shadows</h3>
+                    <p>Enable realistic shadows in the game world</p>
+                </div>
+                <label class="switch"><input id="setting-shadows" type="checkbox" checked><span></span></label>
+            </div>
+            <div class="setting-row">
+                <div>
+                    <h3>Music Volume</h3>
+                    <p>Adjust background music level</p>
+                </div>
+                <div class="volume-control">
+                    <input id="setting-music-volume" class="volume-slider" type="range" min="0" max="100" value="70" step="1" aria-label="Music volume" />
+                    <span id="music-volume-value" class="volume-value">70%</span>
+                </div>
+            </div>
+            <div class="setting-row">
+                <div>
+                    <h3>Particle Effects</h3>
+                    <p>Show weather effects and particles</p>
+                </div>
+                <label class="switch"><input id="setting-particles" type="checkbox" checked><span></span></label>
+            </div>
+            <div class="setting-row">
+                <div>
+                    <h3>Motion Blur</h3>
+                    <p>Add motion blur when moving quickly</p>
+                </div>
+                <label class="switch"><input id="setting-motion" type="checkbox"><span></span></label>
+            </div>
+            <button id="save-settings" class="save-settings" type="button">Save Settings</button>
+        </section>
+
+        <section id="help-panel" class="floating-panel hidden" role="dialog" aria-label="Help and controls">
+            <div class="panel-title-row">
+                <h2>❓ Help &amp; Controls</h2>
+                <button class="panel-close" type="button" data-close-panel="help-panel" aria-label="Close help panel">✕</button>
+            </div>
+            <div class="help-block goal">
+                <h3>🎂 Game Goal</h3>
+                <p>Help Tim find his 5 friends scattered across the map so they can all celebrate his birthday party together.</p>
+            </div>
+            <div class="help-block controls">
+                <h3>🎮 Controls</h3>
+                <p><span class="keycap">WASD</span> Move around</p>
+                <p><span class="keycap">Mouse</span> Look around</p>
+                <p><span class="keycap">E</span> Interact with friends</p>
+                <p><span class="keycap">Space</span> Jump</p>
+            </div>
+            <div class="help-block areas">
+                <h3>🗺 Areas to Explore</h3>
+                <p>🌳 Park</p>
+                <p>🌲 Forest</p>
+                <p>🏖 Beach</p>
+                <p>🏙 City</p>
+            </div>
+        </section>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="chat-bubble" class="hidden" aria-live="polite"></div>
+
+    <div id="interact-hint" class="hidden">E</div>
+
+    <div id="blocker">
+        <div class="overlay-balloons" aria-hidden="true">
+            <span class="balloon b1"></span>
+            <span class="balloon b2"></span>
+            <span class="balloon b3"></span>
+            <span class="balloon b4"></span>
+            <span class="balloon b5"></span>
+        </div>
+        <div id="instructions" role="dialog" aria-modal="true" aria-labelledby="start-title">
+            <div class="party-confetti" aria-hidden="true"></div>
+
+            <div id="intro-screen" class="instructions-view">
+                <h1 id="start-title"><span>Tim's Birthday</span><span>Scavenger Hunt</span></h1>
+                <p class="welcome-line">Click anywhere to play</p>
+                <p class="title-credit">ICG - 2026</p>
+                <button id="play-button" class="play-action" type="button">Play</button>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="pause-overlay" class="hidden" aria-hidden="true">
+        <div id="pause-modal" role="dialog" aria-modal="true" aria-label="Paused">
+            <p class="pause-title">Paused</p>
+            <p class="pause-subtitle">Click anywhere to play</p>
+        </div>
+    </div>
+
+    <script type="module" src="src/js/main.js"></script>
+</body>
+</html>
