@@ -36,8 +36,6 @@ const helpToggleButton = document.getElementById('help-toggle');
 const friendsPanelElement = document.getElementById('friends-panel');
 const settingsPanelElement = document.getElementById('settings-panel');
 const helpPanelElement = document.getElementById('help-panel');
-const questHintToggleButton = document.getElementById('quest-hint-toggle');
-const questHintPanelElement = document.getElementById('quest-hint-panel');
 const friendsListElement = document.getElementById('friends-list');
 const friendsFoundCountElement = document.getElementById('friends-found-count');
 const closePanelButtons = Array.from(document.querySelectorAll('[data-close-panel]'));
@@ -263,23 +261,6 @@ function setupInterface() {
   setQuest(QUEST_FIND_BIRTHDAY_BOY, { playSound: false });
   renderFriendsPanel();
 
-  const toggleHintPanel = () => {
-    if (!questHintToggleButton || !questHintPanelElement) return;
-    const isExpanded = questHintToggleButton.getAttribute('aria-expanded') === 'true';
-    questHintToggleButton.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
-    questHintToggleButton.innerHTML = isExpanded
-      ? '<span class="material-symbols-rounded" aria-hidden="true">lightbulb</span><span>Hint (H)</span>'
-      : '<span class="material-symbols-rounded" aria-hidden="true">lightbulb</span><span>Hide (H)</span>';
-    questHintPanelElement.classList.toggle('hidden', isExpanded);
-  };
-
-  if (questHintToggleButton && questHintPanelElement) {
-    questHintPanelElement.classList.add('hidden');
-    questHintToggleButton.setAttribute('aria-expanded', 'false');
-    questHintToggleButton.innerHTML = '<span class="material-symbols-rounded" aria-hidden="true">lightbulb</span><span>Hint (H)</span>';
-    questHintToggleButton.addEventListener('click', toggleHintPanel);
-  }
-
   if (weatherToggleButton) weatherToggleButton.addEventListener('click', () => togglePanel('weather-panel'));
   if (friendsToggleButton) friendsToggleButton.addEventListener('click', () => togglePanel('friends-panel'));
   if (settingsToggleButton) settingsToggleButton.addEventListener('click', () => togglePanel('settings-panel'));
@@ -303,11 +284,6 @@ function setupInterface() {
   document.addEventListener('keydown', (event) => {
     if (!hasJoinedOnce) return;
     if (event.repeat) return;
-    if (event.code === 'KeyH') {
-      playButtonClickSound();
-      toggleHintPanel();
-      return;
-    }
     if (event.code === 'KeyC') {
       playButtonClickSound();
       togglePanel('weather-panel');

@@ -92,10 +92,14 @@ body::before {
 }
 
 .quest-head {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
+  justify-content: center;
   align-items: center;
   gap: 10px;
+}
+
+.quest-head > div {
+  text-align: center;
 }
 
 .quest-orb {
@@ -123,60 +127,6 @@ body::before {
   line-height: 0.95;
   color: #5d2396;
   font-weight: 800;
-}
-
-.chip-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 13px;
-  border: 0;
-  border-radius: 14px;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #734d2e;
-  background: #f4cb52;
-  box-shadow: 0 2px 6px rgba(158, 108, 25, 0.18);
-  cursor: pointer;
-}
-
-.chip-action .material-symbols-rounded {
-  font-size: 1.15rem;
-  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
-}
-
-.quest-hint {
-  border-top: 2px solid #d8c7ff;
-  padding-top: 12px;
-  display: grid;
-  gap: 10px;
-  animation: hintDrop 0.22s ease both;
-}
-
-.quest-hint.hidden {
-  display: none;
-}
-
-.hint-location,
-.hint-detail {
-  margin: 0;
-  padding: 9px 14px;
-  font-size: 1.06rem;
-  font-weight: 700;
-  border-radius: 16px;
-  color: #6f26bc;
-  width: fit-content;
-}
-
-.hint-location {
-  background: #ede2f7;
-  border: 1px solid #d9b8f3;
-}
-
-.hint-detail {
-  width: auto;
-  background: #f1edd6;
-  border: 1px solid #efd14f;
 }
 
 /* Left controls */
