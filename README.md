@@ -1,6 +1,19 @@
-# Organized Structure
+# Game is deployed in:
+https://catialopesua.github.io/icg-project/testing.html
 
-## Main App Files
+### Game Goal:
+Help Tim find his 5 friends scattered across the map so they can all celebrate his birthday party together.
+
+### Controls:
+- WASD Move around
+- Mouse Look around
+- E Interact with friends
+- Space Jump
+
+
+# Folder Organization:
+
+## Main Files:
 - `testing.html` - entry page
 - `src/js/main.js` - main game logic
 - `src/js/garden.js` - garden zone logic
@@ -8,14 +21,8 @@
 - `src/js/beach.js` - beach zone logic
 - `src/css/styles.css` - UI styling
 
-## Assets
+## Assets:
 - `models/` - 3D models used at runtime
 - `images/` - UI/profile images used at runtime
-- `audio/` - UI and quest/chat sound effects
+- `audio/` - Music/Sound effects
 - `assets/` - material/support assets
-
-## Archived / Non-runtime Files
-- `Useless/` - files not used by runtime app (blend files, backups, installer, loose texture)
-
-## Run
-Open `testing.html` in a local server/browser context that supports ES modules and external imports.

@@ -159,9 +159,9 @@ const PANEL_BY_ID = {
 
 const friendsState = [
   {
-    name: 'Sarah',
-    description: "Tim's best friend who loves reading books under the trees",
-    weather: '☀️ Sunny Day',
+    name: 'Hunter',
+    description: "He's quiet and a bit shy, but with a sassy edge and a love for the loud energy of the city",
+    weather: '⛈️ Stormy Night',
     image: 'images/friend1.png',
     unlocked: true
   },
