@@ -43,6 +43,10 @@ const saveSettingsButton = document.getElementById('save-settings');
 const settingShadows = document.getElementById('setting-shadows');
 const settingMusicVolume = document.getElementById('setting-music-volume');
 const musicVolumeValue = document.getElementById('music-volume-value');
+const settingSfxVolume = document.getElementById('setting-sfx-volume');
+const sfxVolumeValue = document.getElementById('sfx-volume-value');
+const settingSensitivity = document.getElementById('setting-sensitivity');
+const sensitivityValue = document.getElementById('sensitivity-value');
 const chatBubbleElement = document.getElementById('chat-bubble');
 const questMainTextElement = document.getElementById('quest-main-text');
 const pauseOverlay = document.getElementById('pause-overlay');
@@ -54,23 +58,37 @@ const newQuestAudio = new Audio('./audio/new-quest.mp3');
 newQuestAudio.preload = 'auto';
 const chatContinueAudio = new Audio('./audio/chat-continue.mp3');
 chatContinueAudio.preload = 'auto';
-const AUDIO_VOLUME_STORAGE_KEY = 'tim-birthday-music-volume';
+const MUSIC_VOLUME_STORAGE_KEY = 'tim-birthday-music-volume';
+const SFX_VOLUME_STORAGE_KEY = 'tim-birthday-sfx-volume';
+const SENSITIVITY_STORAGE_KEY = 'tim-birthday-look-sensitivity';
+
+let lookSensitivity = 1;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
 function applyMusicVolume(percentage) {
+  // Placeholder until background music tracks are added to the project.
+  return Math.max(0, Math.min(100, Math.round(Number(percentage) || 0)));
+}
+
+function applySoundEffectsVolume(percentage) {
   const normalized = clamp01(Number(percentage) / 100);
-  // Keep relative loudness between cues while honoring master slider volume.
   buttonClickAudio.volume = clamp01(normalized * 0.75);
   newQuestAudio.volume = clamp01(normalized * 0.95);
   chatContinueAudio.volume = clamp01(normalized * 0.9);
 }
 
-function loadSavedMusicVolume() {
+function applyLookSensitivity(percentage) {
+  const normalized = Math.max(0.2, Math.min(3, Number(percentage) / 100));
+  lookSensitivity = normalized;
+  if (controls) controls.pointerSpeed = normalized;
+}
+
+function loadSavedPercentage(storageKey) {
   try {
-    const stored = window.localStorage.getItem(AUDIO_VOLUME_STORAGE_KEY);
+    const stored = window.localStorage.getItem(storageKey);
     if (stored == null) return null;
     const parsed = Number(stored);
     if (Number.isNaN(parsed)) return null;
@@ -80,9 +98,9 @@ function loadSavedMusicVolume() {
   }
 }
 
-function saveMusicVolume(percentage) {
+function savePercentage(storageKey, percentage) {
   try {
-    window.localStorage.setItem(AUDIO_VOLUME_STORAGE_KEY, String(percentage));
+    window.localStorage.setItem(storageKey, String(percentage));
   } catch (e) {
     // Ignore persistence failures (private mode or blocked storage).
   }
@@ -313,19 +331,52 @@ function setupInterface() {
   });
 
   if (settingMusicVolume && musicVolumeValue) {
-    const savedVolume = loadSavedMusicVolume();
+    const savedVolume = loadSavedPercentage(MUSIC_VOLUME_STORAGE_KEY);
     if (savedVolume !== null) settingMusicVolume.value = String(savedVolume);
 
     const syncMusicVolume = () => {
       const value = Number(settingMusicVolume.value);
       musicVolumeValue.textContent = `${value}%`;
       applyMusicVolume(value);
-      saveMusicVolume(value);
+      savePercentage(MUSIC_VOLUME_STORAGE_KEY, value);
     };
     settingMusicVolume.addEventListener('input', syncMusicVolume);
     syncMusicVolume();
   } else {
     applyMusicVolume(70);
+  }
+
+  if (settingSfxVolume && sfxVolumeValue) {
+    const savedSfxVolume = loadSavedPercentage(SFX_VOLUME_STORAGE_KEY);
+    if (savedSfxVolume !== null) settingSfxVolume.value = String(savedSfxVolume);
+
+    const syncSfxVolume = () => {
+      const value = Number(settingSfxVolume.value);
+      sfxVolumeValue.textContent = `${value}%`;
+      applySoundEffectsVolume(value);
+      savePercentage(SFX_VOLUME_STORAGE_KEY, value);
+    };
+    settingSfxVolume.addEventListener('input', syncSfxVolume);
+    syncSfxVolume();
+  } else {
+    applySoundEffectsVolume(80);
+  }
+
+  if (settingSensitivity && sensitivityValue) {
+    const savedSensitivity = loadSavedPercentage(SENSITIVITY_STORAGE_KEY);
+    if (savedSensitivity !== null) settingSensitivity.value = String(savedSensitivity);
+
+    const syncSensitivity = () => {
+      const value = Number(settingSensitivity.value);
+      const multiplier = Math.max(0.2, Math.min(3, value / 100));
+      sensitivityValue.textContent = `${multiplier.toFixed(2)}x`;
+      applyLookSensitivity(value);
+      savePercentage(SENSITIVITY_STORAGE_KEY, value);
+    };
+    settingSensitivity.addEventListener('input', syncSensitivity);
+    syncSensitivity();
+  } else {
+    applyLookSensitivity(100);
   }
 
   if (settingShadows) {
@@ -353,6 +404,7 @@ setupInterface();
 
 function initPointerLock() {
   controls = new PointerLockControls(camera, document.body);
+  controls.pointerSpeed = lookSensitivity;
   scene.add(controls.getObject());
 
   // movement state

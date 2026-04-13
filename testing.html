@@ -99,11 +99,21 @@
             <div class="setting-row">
                 <div>
                     <h3>Music Volume</h3>
-                    <p>Adjust background music level</p>
+                    <p>Background music level (kept for future music tracks)</p>
                 </div>
                 <div class="volume-control">
                     <input id="setting-music-volume" class="volume-slider" type="range" min="0" max="100" value="70" step="1" aria-label="Music volume" />
                     <span id="music-volume-value" class="volume-value">70%</span>
+                </div>
+            </div>
+            <div class="setting-row">
+                <div>
+                    <h3>Sound Effects</h3>
+                    <p>Adjust UI and quest sound effect volume</p>
+                </div>
+                <div class="volume-control">
+                    <input id="setting-sfx-volume" class="volume-slider" type="range" min="0" max="100" value="80" step="1" aria-label="Sound effects volume" />
+                    <span id="sfx-volume-value" class="volume-value">80%</span>
                 </div>
             </div>
             <div class="setting-row">
@@ -115,10 +125,13 @@
             </div>
             <div class="setting-row">
                 <div>
-                    <h3>Motion Blur</h3>
-                    <p>Add motion blur when moving quickly</p>
+                    <h3>Sensitivity</h3>
+                    <p>Control camera look speed</p>
                 </div>
-                <label class="switch"><input id="setting-motion" type="checkbox"><span></span></label>
+                <div class="volume-control">
+                    <input id="setting-sensitivity" class="volume-slider" type="range" min="20" max="300" value="100" step="5" aria-label="Camera sensitivity" />
+                    <span id="sensitivity-value" class="volume-value">1.00x</span>
+                </div>
             </div>
             <button id="save-settings" class="save-settings" type="button">Save Settings</button>
         </section>
