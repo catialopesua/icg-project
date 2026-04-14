@@ -13,6 +13,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(window.devicePixelRatio || 1);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 // set a dark clear color for night testing
 renderer.setClearColor(0x02030a);
 container.appendChild(renderer.domElement);
@@ -380,14 +381,14 @@ function setupInterface() {
   }
 
   if (settingShadows) {
+    settingShadows.checked = true;
+    renderer.shadowMap.enabled = true;
+    syncSceneMeshShadows(true);
+    updateNightStreetlightShadowCasters(true);
     settingShadows.addEventListener('change', () => {
       renderer.shadowMap.enabled = settingShadows.checked;
-      scene.traverse((obj) => {
-        if (obj.isMesh) {
-          obj.castShadow = settingShadows.checked;
-          obj.receiveShadow = settingShadows.checked;
-        }
-      });
+      syncSceneMeshShadows(settingShadows.checked);
+      updateNightStreetlightShadowCasters(true);
     });
   }
 
@@ -564,19 +565,66 @@ const updateMovement = pointerLockState.updateMovement;
 
 // Lights (night mode setup - will be adjusted by applyDayNight)
 scene.add(new THREE.AmbientLight(0xffffff, 0.06));
+const DAY_LIGHT_POS = new THREE.Vector3(62, 56, -32);
+const NIGHT_LIGHT_POS = new THREE.Vector3(-24, 26, -16);
+const SHADOW_TARGET_POS = new THREE.Vector3(2, 0, 14);
+const DAY_SHADOW_BOUNDS = 52;
+const NIGHT_SHADOW_BOUNDS = 44;
+const MAX_DYNAMIC_NIGHT_STREETLIGHT_SHADOWS = 2;
+const NIGHT_STREETLIGHT_SHADOW_RANGE = 24;
 const dir = new THREE.DirectionalLight(0x7688c0, 0.15);
-dir.position.set(5, 10, 2);
+dir.position.copy(NIGHT_LIGHT_POS);
 dir.castShadow = true;
-dir.shadow.mapSize.set(2048, 2048);
+dir.shadow.mapSize.set(4096, 4096);
 dir.shadow.camera.near = 0.5;
-dir.shadow.bias = -0.0008;  // Better shadow quality
-dir.shadow.camera.far = 50;
-dir.shadow.camera.left = -12;
-dir.shadow.camera.right = 12;
-dir.shadow.camera.top = 12;
-dir.shadow.camera.bottom = -12;
-dir.shadow.blurSamples = 8;  // Soft shadow edges
+dir.shadow.bias = -0.001;
+dir.shadow.normalBias = 0.05;
+dir.shadow.camera.far = 140;
+dir.shadow.camera.left = -NIGHT_SHADOW_BOUNDS;
+dir.shadow.camera.right = NIGHT_SHADOW_BOUNDS;
+dir.shadow.camera.top = NIGHT_SHADOW_BOUNDS;
+dir.shadow.camera.bottom = -NIGHT_SHADOW_BOUNDS;
+dir.shadow.radius = 5;
+dir.shadow.blurSamples = 8;
 scene.add(dir);
+scene.add(dir.target);
+dir.target.position.copy(SHADOW_TARGET_POS);
+dir.target.updateMatrixWorld(true);
+
+function makeCelestialBody(coreColor, haloColor, radius, haloScale = 1.75, haloOpacity = 0.22) {
+  const group = new THREE.Group();
+  const coreMat = new THREE.MeshBasicMaterial({ color: coreColor, fog: false });
+  const core = new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 24), coreMat);
+  const haloMat = new THREE.MeshBasicMaterial({
+    color: haloColor,
+    transparent: true,
+    opacity: haloOpacity,
+    fog: false,
+    side: THREE.BackSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(radius * haloScale, 24, 24), haloMat);
+  core.castShadow = false;
+  core.receiveShadow = false;
+  core.userData.noAutoShadow = true;
+  halo.castShadow = false;
+  halo.receiveShadow = false;
+  halo.userData.noAutoShadow = true;
+  group.add(core);
+  group.add(halo);
+  return group;
+}
+
+const sun = makeCelestialBody(0xfffbf0, 0xfff2dc, 2.2, 1.8, 0.24);
+sun.position.copy(DAY_LIGHT_POS);
+sun.visible = false;
+scene.add(sun);
+
+const moon = makeCelestialBody(0xd8e6ff, 0x9ab7ff, 1.65, 1.9, 0.18);
+moon.position.set(-58, 45, 30);
+moon.visible = true;
+scene.add(moon);
 
 // Subtle hemisphere for night sky/ground ambient light
 const hemi = new THREE.HemisphereLight(0x0a1b2e, 0x02040a, 0.05);
@@ -620,6 +668,82 @@ createGardenZone(scene, -18, 12);
 
 createCityZone(scene, 22, -4);
 const beachZone = createBeachZone(scene, 0, 12);
+
+function shouldAutoShadowMesh(obj) {
+  if (!obj || !obj.isMesh) return false;
+  if (obj.userData && obj.userData.noAutoShadow) return false;
+  const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+  const isVolumetricLike = mats.some((mat) => mat && mat.transparent && typeof mat.opacity === 'number' && mat.opacity < 0.2);
+  return !isVolumetricLike;
+}
+
+function syncSceneMeshShadows(enabled = renderer.shadowMap.enabled) {
+  scene.traverse((obj) => {
+    if (!obj.isMesh) return;
+    if (!shouldAutoShadowMesh(obj)) {
+      obj.castShadow = false;
+      obj.receiveShadow = false;
+      return;
+    }
+    obj.castShadow = enabled;
+    obj.receiveShadow = enabled;
+  });
+}
+
+function configureStreetLightShadow(light) {
+  if (!light || !light.isSpotLight) return;
+  if (light.userData && light.userData._shadowProfileApplied) return;
+  light.shadow.mapSize.set(768, 768);
+  light.shadow.camera.near = 0.2;
+  const baseDistance = (typeof light.distance === 'number' && light.distance > 0) ? light.distance : 10;
+  light.shadow.camera.far = Math.max(8, baseDistance + 2);
+  light.shadow.bias = -0.0006;
+  light.shadow.normalBias = 0.015;
+  light.shadow.radius = 3;
+  light.shadow.blurSamples = 6;
+  light.userData = light.userData || {};
+  light.userData._shadowProfileApplied = true;
+}
+
+function updateNightStreetlightShadowCasters(forceUpdate = false) {
+  const sLights = (scene.userData && scene.userData.streetLights) ? scene.userData.streetLights : [];
+  if (!sLights.length) return;
+
+  // Start from a clean state so only selected local lights cast shadows.
+  for (const sl of sLights) {
+    if (!sl || !sl.isSpotLight) continue;
+    if (sl.castShadow) {
+      sl.castShadow = false;
+      if (forceUpdate) sl.shadow.needsUpdate = true;
+    }
+  }
+
+  const shadowsEnabled = renderer.shadowMap.enabled && (!settingShadows || settingShadows.checked);
+  const isDay = Boolean(scene.userData && scene.userData.isDay);
+  if (isDay || !shadowsEnabled) return;
+
+  const origin = (controls && controls.getObject) ? controls.getObject().position : camera.position;
+  const maxDistSq = NIGHT_STREETLIGHT_SHADOW_RANGE * NIGHT_STREETLIGHT_SHADOW_RANGE;
+  const candidates = [];
+  for (const sl of sLights) {
+    if (!sl || !sl.isSpotLight) continue;
+    if (sl.visible === false || sl.intensity <= 0.01) continue;
+    const distSq = sl.position.distanceToSquared(origin);
+    if (distSq > maxDistSq) continue;
+    candidates.push({ light: sl, distSq });
+  }
+
+  candidates.sort((a, b) => a.distSq - b.distSq);
+  const activeCount = Math.min(MAX_DYNAMIC_NIGHT_STREETLIGHT_SHADOWS, candidates.length);
+  for (let i = 0; i < activeCount; i++) {
+    const sl = candidates[i].light;
+    configureStreetLightShadow(sl);
+    sl.castShadow = true;
+    if (forceUpdate) sl.shadow.needsUpdate = true;
+  }
+}
+
+syncSceneMeshShadows(true);
 
 // GLTF/GLB model loader and placement
 const loader = new GLTFLoader();
@@ -853,6 +977,8 @@ const introOrbitState = {
   radius: 32,
   center: new THREE.Vector3(0, 0, 4)
 };
+let shadowSyncAccumulator = 0;
+let streetLightShadowSyncAccumulator = 0;
 
 function introIsVisible() {
   return Boolean(blocker && !blocker.classList.contains('hidden') && !hasJoinedOnce);
@@ -878,6 +1004,19 @@ function animate() {
   // update movement & first-person controls
   if (typeof updateMovement === 'function') updateMovement(dt);
   if (beachZone && typeof beachZone.update === 'function') beachZone.update(elapsed, dt);
+
+  // Keep new async objects shadow-enabled without doing full-scene updates every frame.
+  shadowSyncAccumulator += dt;
+  if (shadowSyncAccumulator >= 0.25) {
+    shadowSyncAccumulator = 0;
+    syncSceneMeshShadows(renderer.shadowMap.enabled);
+  }
+
+  streetLightShadowSyncAccumulator += dt;
+  if (streetLightShadowSyncAccumulator >= 0.2) {
+    streetLightShadowSyncAccumulator = 0;
+    updateNightStreetlightShadowCasters(false);
+  }
 
   // proximity check for interact hint
   try {
@@ -923,16 +1062,41 @@ animate();
     // Adjust clear color for sky gradient
     renderer.setClearColor(day ? 0xa6d8ff : 0x02030a);
 
-    // Directional light (sun/moon)
-    // During day: warm sunlight
-    // During night: cool blue moonlight
+    // Directional light and shadows are intentionally different between day and night.
     if (day) {
-      dir.color.set(0xfff1d6);  // Warm daylight
-      dir.intensity = 0.6;      // Strong daytime sun
+      dir.color.set(0xfff1d6);
+      dir.intensity = 0.68;
+      dir.position.copy(DAY_LIGHT_POS);
+      dir.shadow.mapSize.set(4096, 4096);
+      dir.shadow.bias = -0.00035;
+      dir.shadow.normalBias = 0.02;
+      dir.shadow.radius = 2;
+      dir.shadow.camera.left = -DAY_SHADOW_BOUNDS;
+      dir.shadow.camera.right = DAY_SHADOW_BOUNDS;
+      dir.shadow.camera.top = DAY_SHADOW_BOUNDS;
+      dir.shadow.camera.bottom = -DAY_SHADOW_BOUNDS;
+      sun.visible = true;
+      moon.visible = false;
     } else {
-      dir.color.set(0x7688c0);  // Cool night blue
-      dir.intensity = 0.15;     // Dim moonlight
+      dir.color.set(0x90a9e6);
+      dir.intensity = 0.26;
+      dir.position.copy(NIGHT_LIGHT_POS);
+      dir.shadow.mapSize.set(4096, 4096);
+      dir.shadow.bias = -0.001;
+      dir.shadow.normalBias = 0.03;
+      dir.shadow.radius = 4;
+      dir.shadow.camera.left = -NIGHT_SHADOW_BOUNDS;
+      dir.shadow.camera.right = NIGHT_SHADOW_BOUNDS;
+      dir.shadow.camera.top = NIGHT_SHADOW_BOUNDS;
+      dir.shadow.camera.bottom = -NIGHT_SHADOW_BOUNDS;
+      sun.visible = false;
+      moon.visible = true;
     }
+    dir.target.position.copy(SHADOW_TARGET_POS);
+    dir.target.updateMatrixWorld(true);
+    dir.shadow.camera.updateProjectionMatrix();
+    dir.shadow.needsUpdate = true;
+    updateNightStreetlightShadowCasters(true);
 
     // Hemisphere light (sky/ground ambient)
     if (day) {
@@ -949,7 +1113,7 @@ animate();
     const ambs = [];
     scene.traverse((o) => { if (o.isAmbientLight) ambs.push(o); });
     for (const a of ambs) {
-      a.intensity = day ? 0.4 : 0.05;
+      a.intensity = day ? 0.4 : 0.015;
     }
 
     // Adjust emissive materials throughout the scene

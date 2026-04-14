@@ -237,16 +237,41 @@ export function createGardenZone(scene, cx, cz){
       lamp.traverse((n) => {
         if (!n.isMesh || !n.material) return;
         const mats = Array.isArray(n.material) ? n.material : [n.material];
-        for (const mat of mats) {
+        for (let mat of mats) {
           if (!mat) continue;
           const emissiveSum = (mat.emissive && (mat.emissive.r + mat.emissive.g + mat.emissive.b)) || 0;
           const emissiveIntensity = (typeof mat.emissiveIntensity === 'number') ? mat.emissiveIntensity : 0;
-          const looksLikeBulb = emissiveIntensity > 1e-3 || emissiveSum > 1e-6 || /bulb|light|lamp/i.test(n.name || '');
+          const isCubeEmitter = /cube\.?003/i.test(n.name || '') || /cube\.?003/i.test(mat.name || '');
+          const looksLikeBulb = isCubeEmitter || emissiveIntensity > 1e-3 || emissiveSum > 1e-6 || /bulb|light|lamp/i.test(n.name || '');
           if (!looksLikeBulb) continue;
+          if (isCubeEmitter && mat.emissive === undefined) {
+            const forced = new THREE.MeshStandardMaterial({
+              color: (mat.color && mat.color.isColor) ? mat.color.clone() : new THREE.Color(0xffffff),
+              map: mat.map || null,
+              transparent: Boolean(mat.transparent),
+              opacity: (typeof mat.opacity === 'number') ? mat.opacity : 1,
+              roughness: (typeof mat.roughness === 'number') ? mat.roughness : 0.8,
+              metalness: (typeof mat.metalness === 'number') ? mat.metalness : 0.05,
+              emissive: new THREE.Color(0xffd699),
+              emissiveIntensity: 1.2
+            });
+            if (mat.side !== undefined) forced.side = mat.side;
+            if (mat.alphaTest !== undefined) forced.alphaTest = mat.alphaTest;
+            if (Array.isArray(n.material)) n.material = n.material.map((m) => (m === mat ? forced : m));
+            else n.material = forced;
+            mat = forced;
+          }
+          if (isCubeEmitter && mat.emissive !== undefined) {
+            if (emissiveSum <= 1e-6 && typeof mat.emissive.setHex === 'function') mat.emissive.setHex(0xffd699);
+            if (emissiveIntensity <= 1e-3) mat.emissiveIntensity = 1.2;
+          }
           n.userData = n.userData || {};
-          n.userData._origEmissiveIntensity = emissiveIntensity || 1;
+          const resolvedIntensity = isCubeEmitter
+            ? Math.max((typeof mat.emissiveIntensity === 'number' ? mat.emissiveIntensity : 0), 1.2)
+            : (emissiveIntensity || 1);
+          n.userData._origEmissiveIntensity = resolvedIntensity;
           scene.userData.streetLightMeshes.push(n);
-          if (scene.userData.isDay && mat.emissive !== undefined) mat.emissiveIntensity = 0;
+          if (mat.emissive !== undefined) mat.emissiveIntensity = scene.userData.isDay ? 0 : resolvedIntensity;
           break;
         }
       });
