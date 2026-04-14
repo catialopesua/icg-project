@@ -178,10 +178,22 @@ export function createCityZone(scene, cx, cz){
     const lampBox = new THREE.Box3().setFromObject(lamp);
     const topY = (lampBox && lampBox.max && isFinite(lampBox.max.y)) ? lampBox.max.y : (lamp.position.y + 2.1 * lamp.scale.y);
 
-    const spot = new THREE.SpotLight(0xfff3d6, 3.0, 7, Math.PI / 3, 0.22, 2);
-    spot.position.set(x, topY - 0.85, z + spotZOffset);
+    // Create realistic streetlight with proper spotlight properties
+    // Warmish-yellow color: 0xffd699 (soft amber/yellow)
+    // Intensity: 2.5 for realistic street illumination (not too bright to be unrealistic)
+    // Range: 15 for wider coverage
+    // Angle: Math.PI / 4 for 45-degree cone (narrower for focused light)
+    // Penumbra: 0.3 for soft edges instead of 0.22
+    // Decay: 2 for realistic inverse-square falloff
+    const spot = new THREE.SpotLight(0xffd699, 2.5, 20, Math.PI / 2.5, 0.9, 2);
+    
+    // Position light slightly below lamp head for realistic downward lighting
+    spot.position.set(x, topY - 0.5, z + spotZOffset);
     spot.target.position.set(x, 0.05, z);
+    
+    // Disable shadow casting to save texture units (directional light handles scene shadows)
     spot.castShadow = false;
+    
     scene.add(spot.target);
     scene.add(spot);
 
@@ -198,11 +210,22 @@ export function createCityZone(scene, cx, cz){
       console.warn('Failed to register streetlight spot', e);
     }
 
+    // Create more refined cone geometry for visual light representation
     const dir = new THREE.Vector3().subVectors(spot.target.position, spot.position).normalize();
-    const coneHeight = Math.max(0.8, spot.position.y - 0.15);
-    const baseRadius = Math.max(0.14, coneHeight * Math.tan(spot.angle) * 1.05);
-    const coneGeo = new THREE.ConeGeometry(baseRadius + 2, coneHeight + 1.6, 20, 1, true);
-    const coneMat = new THREE.MeshStandardMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.06, depthWrite: false, side: THREE.DoubleSide });
+    const coneHeight = Math.max(1.2, spot.position.y - 0.05);
+    const baseRadius = Math.max(0.2, coneHeight * Math.tan(spot.angle) * 0.95);
+    
+    // Enhanced cone with better geometry
+    const coneGeo = new THREE.ConeGeometry(baseRadius * 1.3, coneHeight * 1.2, 24, 1, true);
+    const coneMat = new THREE.MeshStandardMaterial({ 
+      color: 0xffd699, 
+      transparent: true, 
+      opacity: 0.005, 
+      depthWrite: false, 
+      side: THREE.DoubleSide,
+      emissive: 0xffd699,
+      emissiveIntensity: 0.1
+    });
     const cone = new THREE.Mesh(coneGeo, coneMat);
     cone.position.copy(spot.position).add(dir.clone().multiplyScalar(coneHeight / 2));
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
@@ -271,15 +294,25 @@ export function createCityZone(scene, cx, cz){
 
     const bulb = new THREE.Mesh(
       new THREE.SphereGeometry(0.09, 12, 10),
-      new THREE.MeshStandardMaterial({ color: 0xfff8dd, emissive: 0xffe3a8, emissiveIntensity: 0.9 })
+      new THREE.MeshStandardMaterial({ color: 0xfff8dd, emissive: 0xffd699, emissiveIntensity: 1.2 })
     );
     bulb.position.set(x, 2.26, z);
     scene.add(bulb);
 
-    const spot = new THREE.SpotLight(0xfff2d0, 2.4, 6, Math.PI / 24, 0.32, 1.5);
-    spot.position.set(x, 2.2, z);
+    // Realistic streetlight with warm color and proper decay
+    // 0xffd699: soft amber/warm yellow
+    // Intensity: 1.8 for fallback lights (smaller sources)
+    // Range: 10 for moderate coverage
+    // Angle: Math.PI / 5 for 36-degree cone
+    // Penumbra: 0.4 for soft edges
+    // Decay: 2 for realistic inverse-square falloff
+    const spot = new THREE.SpotLight(0xffd699, 1.8, 10, Math.PI / 5, 0.4, 2);
+    spot.position.set(x, 2.15, z);
     spot.target.position.set(roadTargetX, 0.05, roadTargetZ);
+    
+    // Disable shadow casting to save texture units (directional light handles scene shadows)
     spot.castShadow = false;
+    
     scene.add(spot.target);
     scene.add(spot);
 
@@ -305,10 +338,18 @@ export function createCityZone(scene, cx, cz){
     }
 
     const dir = new THREE.Vector3().subVectors(spot.target.position, spot.position).normalize();
-    const coneHeight = Math.max(0.75, spot.position.y - 0.05);
-    const baseRadius = Math.max(0.16, coneHeight * Math.tan(spot.angle) * 1.4);
-    const coneGeo = new THREE.ConeGeometry(baseRadius, coneHeight, 32, 1, true);
-    const coneMat = new THREE.MeshStandardMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.06, depthWrite: false, side: THREE.DoubleSide });
+    const coneHeight = Math.max(1.0, spot.position.y - 0.05);
+    const baseRadius = Math.max(0.18, coneHeight * Math.tan(spot.angle) * 0.9);
+    const coneGeo = new THREE.ConeGeometry(baseRadius * 1.2, coneHeight * 1.1, 28, 1, true);
+    const coneMat = new THREE.MeshStandardMaterial({ 
+      color: 0xffd699, 
+      transparent: true, 
+      opacity: 0.035, 
+      depthWrite: false, 
+      side: THREE.DoubleSide,
+      emissive: 0xffd699,
+      emissiveIntensity: 0.08
+    });
     const cone = new THREE.Mesh(coneGeo, coneMat);
     cone.position.copy(spot.position).add(dir.clone().multiplyScalar(coneHeight / 2));
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);

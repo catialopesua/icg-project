@@ -199,122 +199,215 @@ export function createGardenZone(scene, cx, cz){
   // place streetlights between benches on the path center
   const lightCount = benchCountAlong;
   const lightLoader = new GLTFLoader();
+
+  function registerStreetLight(spot) {
+    try {
+      spot.userData = spot.userData || {};
+      spot.userData._origIntensity = spot.intensity;
+      spot.userData.isStreetLight = true;
+      scene.userData.streetLights = scene.userData.streetLights || [];
+      scene.userData.streetLights.push(spot);
+      if (scene.userData.isDay) spot.intensity = 0;
+    } catch (e) {
+      console.warn('Failed to register garden streetlight spot', e);
+    }
+  }
+
+  function registerStreetLightCone(cone) {
+    try {
+      scene.userData.streetLightMeshes = scene.userData.streetLightMeshes || [];
+      const mats = Array.isArray(cone.material) ? cone.material : [cone.material];
+      cone.userData = cone.userData || {};
+      cone.userData._origOpacity = (mats[0] && typeof mats[0].opacity === 'number') ? mats[0].opacity : 1;
+      if (scene.userData.isDay) {
+        for (const mat of mats) if (mat && typeof mat.opacity === 'number') mat.opacity = 0;
+      }
+      scene.userData.streetLightMeshes.push(cone);
+      scene.userData.streetLightCones = scene.userData.streetLightCones || [];
+      scene.userData.streetLightCones.push(cone);
+      if (scene.userData.isDay) cone.visible = false;
+    } catch (e) {
+      console.warn('Failed to register garden streetlight cone', e);
+    }
+  }
+
+  function registerLampEmissiveMeshes(lamp) {
+    try {
+      scene.userData.streetLightMeshes = scene.userData.streetLightMeshes || [];
+      lamp.traverse((n) => {
+        if (!n.isMesh || !n.material) return;
+        const mats = Array.isArray(n.material) ? n.material : [n.material];
+        for (const mat of mats) {
+          if (!mat) continue;
+          const emissiveSum = (mat.emissive && (mat.emissive.r + mat.emissive.g + mat.emissive.b)) || 0;
+          const emissiveIntensity = (typeof mat.emissiveIntensity === 'number') ? mat.emissiveIntensity : 0;
+          const looksLikeBulb = emissiveIntensity > 1e-3 || emissiveSum > 1e-6 || /bulb|light|lamp/i.test(n.name || '');
+          if (!looksLikeBulb) continue;
+          n.userData = n.userData || {};
+          n.userData._origEmissiveIntensity = emissiveIntensity || 1;
+          scene.userData.streetLightMeshes.push(n);
+          if (scene.userData.isDay && mat.emissive !== undefined) mat.emissiveIntensity = 0;
+          break;
+        }
+      });
+    } catch (e) {
+      console.warn('Failed to register garden lamp emissive meshes', e);
+    }
+  }
+
+  function addMainConeFromSpot(spot) {
+    const dir = new THREE.Vector3().subVectors(spot.target.position, spot.position).normalize();
+    const coneHeight = Math.max(1.2, spot.position.y - 0.05);
+    const baseRadius = Math.max(0.2, coneHeight * Math.tan(spot.angle) * 0.95);
+    const coneGeo = new THREE.ConeGeometry(baseRadius * 1.3, coneHeight * 1.2, 24, 1, true);
+    const coneMat = new THREE.MeshStandardMaterial({
+      color: 0xffd699,
+      transparent: true,
+      opacity: 0.005,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      emissive: 0xffd699,
+      emissiveIntensity: 0.1
+    });
+    const cone = new THREE.Mesh(coneGeo, coneMat);
+    cone.position.copy(spot.position).add(dir.clone().multiplyScalar(coneHeight / 2));
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    cone.quaternion.copy(q);
+    cone.rotateX(Math.PI);
+    cone.renderOrder = 1;
+    scene.add(cone);
+    registerStreetLightCone(cone);
+  }
+
+  function addFallbackConeFromSpot(spot) {
+    const dir = new THREE.Vector3().subVectors(spot.target.position, spot.position).normalize();
+    const coneHeight = Math.max(1.0, spot.position.y - 0.05);
+    const baseRadius = Math.max(0.18, coneHeight * Math.tan(spot.angle) * 0.9);
+    const coneGeo = new THREE.ConeGeometry(baseRadius * 1.2, coneHeight * 1.1, 28, 1, true);
+    const coneMat = new THREE.MeshStandardMaterial({
+      color: 0xffd699,
+      transparent: true,
+      opacity: 0.035,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      emissive: 0xffd699,
+      emissiveIntensity: 0.08
+    });
+    const cone = new THREE.Mesh(coneGeo, coneMat);
+    cone.position.copy(spot.position).add(dir.clone().multiplyScalar(coneHeight / 2));
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    cone.quaternion.copy(q);
+    cone.rotateX(Math.PI);
+    cone.renderOrder = 1;
+    scene.add(cone);
+    registerStreetLightCone(cone);
+  }
+
   lightLoader.load('./models/streetlight.glb', (gltf) => {
     const lightModel = gltf.scene;
     lightModel.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
-    for (let i = 0; i < lightCount; i++){
+    for (let i = 0; i < lightCount; i++) {
       const t = (i + 0.5) / benchCountAlong;
       const zPos = cz - 1 - t * pathLength;
-      // left lamp (near left side of path)
+
       const lampL = lightModel.clone(true);
       lampL.position.set(cx - 3, -0.05, zPos);
       lampL.scale.setScalar(0.4);
-      lampL.rotation.y = Math.PI/2;
+      lampL.rotation.y = Math.PI / 2;
       scene.add(lampL);
-      // right lamp (mirrored)
+
       const lampR = lightModel.clone(true);
       lampR.position.set(cx + 3, -0.05, zPos);
       lampR.scale.setScalar(0.4);
-      lampR.rotation.y = -Math.PI/2;
+      lampR.rotation.y = -Math.PI / 2;
       scene.add(lampR);
-      // ensure world matrices are updated before computing bounding boxes
+
       lampL.updateMatrixWorld(true);
       lampR.updateMatrixWorld(true);
-      // left spotlight
-      const spotL = new THREE.SpotLight(0xfff3d6, 3.0, 7, Math.PI / 3, 0.22, 2);
+
       const lampBoxL = new THREE.Box3().setFromObject(lampL);
       const lampTopL = (lampBoxL && lampBoxL.max && isFinite(lampBoxL.max.y)) ? lampBoxL.max.y : (lampL.position.y + 2.0 * lampL.scale.y);
-      spotL.position.set(lampL.position.x, lampTopL - 0.85, lampL.position.z + 0.17);
+      const spotL = new THREE.SpotLight(0xffd699, 2.5, 20, Math.PI / 2.5, 0.9, 2);
+      spotL.position.set(lampL.position.x, lampTopL - 0.5, lampL.position.z + 0.17);
       spotL.target.position.set(lampL.position.x, 0.05, lampL.position.z);
-      spotL.castShadow = true;
-      spotL.shadow.mapSize.width = 1024; spotL.shadow.mapSize.height = 1024;
+      spotL.castShadow = false;
       scene.add(spotL.target);
       scene.add(spotL);
-      // right spotlight
-      const spotR = new THREE.SpotLight(0xfff3d6, 3.0, 7, Math.PI / 3, 0.22, 2);
+      registerStreetLight(spotL);
+      addMainConeFromSpot(spotL);
+      registerLampEmissiveMeshes(lampL);
+
       const lampBoxR = new THREE.Box3().setFromObject(lampR);
       const lampTopR = (lampBoxR && lampBoxR.max && isFinite(lampBoxR.max.y)) ? lampBoxR.max.y : (lampR.position.y + 2.0 * lampR.scale.y);
-      spotR.position.set(lampR.position.x, lampTopR - 0.85, lampR.position.z - 0.17);
+      const spotR = new THREE.SpotLight(0xffd699, 2.5, 20, Math.PI / 2.5, 0.9, 2);
+      spotR.position.set(lampR.position.x, lampTopR - 0.5, lampR.position.z - 0.17);
       spotR.target.position.set(lampR.position.x, 0.05, lampR.position.z);
-      spotR.castShadow = true;
-      spotR.shadow.mapSize.width = 1024; spotR.shadow.mapSize.height = 1024;
+      spotR.castShadow = false;
       scene.add(spotR.target);
       scene.add(spotR);
-      // visible cones for both spots
-      const dirL = new THREE.Vector3().subVectors(spotL.target.position, spotL.position).normalize();
-      const coneHeightL = Math.max(0.8, spotL.position.y - 0.15);
-      const baseRadiusL = Math.max(0.14, coneHeightL * Math.tan(spotL.angle) * 1.05);
-      const coneGeoL = new THREE.ConeGeometry(baseRadiusL + 2, coneHeightL + 1.6, 20, 1, true);
-      const coneMatL = new THREE.MeshStandardMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.06, depthWrite: false, side: THREE.DoubleSide });
-      const coneL = new THREE.Mesh(coneGeoL, coneMatL);
-      coneL.position.copy(spotL.position).add(dirL.clone().multiplyScalar(coneHeightL / 2));
-      const qL = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirL);
-      coneL.quaternion.copy(qL);
-      coneL.rotateX(Math.PI);
-      coneL.renderOrder = 1;
-      scene.add(coneL);
-      const dirR = new THREE.Vector3().subVectors(spotR.target.position, spotR.position).normalize();
-      const coneHeightR = Math.max(0.8, spotR.position.y - 0.15);
-      const baseRadiusR = Math.max(0.14, coneHeightR * Math.tan(spotR.angle) * 1.05);
-      const coneGeoR = new THREE.ConeGeometry(baseRadiusR + 2, coneHeightR + 1.6, 20, 1, true);
-      const coneR = new THREE.Mesh(coneGeoR, coneMatL.clone());
-      coneR.position.copy(spotR.position).add(dirR.clone().multiplyScalar(coneHeightR / 2));
-      const qR = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirR);
-      coneR.quaternion.copy(qR);
-      coneR.rotateX(Math.PI);
-      coneR.renderOrder = 1;
-      scene.add(coneR);
+      registerStreetLight(spotR);
+      addMainConeFromSpot(spotR);
+      registerLampEmissiveMeshes(lampR);
     }
   }, undefined, (err) => {
     console.warn('Failed to load streetlight.glb, falling back to simple poles', err);
-    for (let i = 0; i < lightCount; i++){
+    for (let i = 0; i < lightCount; i++) {
       const t = (i + 0.5) / benchCountAlong;
       const zPos = cz - 1 - t * pathLength;
-      // left fallback pole
-      const poleL = new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,2.2), new THREE.MeshStandardMaterial({color:0x333333}));
-      poleL.position.set(cx - 3, 1.1, zPos); poleL.castShadow = true; scene.add(poleL);
-      const bulbL = new THREE.Mesh(new THREE.SphereGeometry(0.08,8,6), new THREE.MeshStandardMaterial({emissive:0xfff0c8, emissiveIntensity:1.0, color:0xffffee}));
-      bulbL.position.set(cx - 3, 2.2, zPos); scene.add(bulbL);
-      // right fallback pole
-      const poleR = poleL.clone(); poleR.position.set(cx + 3, 1.1, zPos); scene.add(poleR);
-      const bulbR = bulbL.clone(); bulbR.position.set(cx + 3, 2.2, zPos); scene.add(bulbR);
-      // spot lights for both bulbs
-      const spotL = new THREE.SpotLight(0xfff2d0, 2.4, 6, Math.PI / 24, 0.32, 1.5);
-      spotL.position.copy(bulbL.position).add(new THREE.Vector3(0, -0.08, 0));
+
+      const poleL = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.2), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+      poleL.position.set(cx - 3, 1.1, zPos);
+      poleL.castShadow = true;
+      scene.add(poleL);
+
+      const bulbL = new THREE.Mesh(
+        new THREE.SphereGeometry(0.08, 8, 6),
+        new THREE.MeshStandardMaterial({ emissive: 0xffd699, emissiveIntensity: 1.2, color: 0xffffee })
+      );
+      bulbL.position.set(cx - 3, 2.2, zPos);
+      scene.add(bulbL);
+
+      const poleR = poleL.clone();
+      poleR.position.set(cx + 3, 1.1, zPos);
+      scene.add(poleR);
+
+      const bulbR = bulbL.clone();
+      bulbR.position.set(cx + 3, 2.2, zPos);
+      scene.add(bulbR);
+
+      const spotL = new THREE.SpotLight(0xffd699, 1.8, 10, Math.PI / 5, 0.4, 2);
+      spotL.position.copy(bulbL.position).add(new THREE.Vector3(0, -0.05, 0));
       spotL.target.position.set(bulbL.position.x, 0.05, bulbL.position.z);
-      spotL.castShadow = true;
-      spotL.shadow.mapSize.width = 1024; spotL.shadow.mapSize.height = 1024;
+      spotL.castShadow = false;
       scene.add(spotL.target);
       scene.add(spotL);
-      const spotR = new THREE.SpotLight(0xfff2d0, 2.4, 6, Math.PI / 24, 0.32, 1.5);
-      spotR.position.copy(bulbR.position).add(new THREE.Vector3(0, -0.08, 0));
+      registerStreetLight(spotL);
+      addFallbackConeFromSpot(spotL);
+
+      const spotR = new THREE.SpotLight(0xffd699, 1.8, 10, Math.PI / 5, 0.4, 2);
+      spotR.position.copy(bulbR.position).add(new THREE.Vector3(0, -0.05, 0));
       spotR.target.position.set(bulbR.position.x, 0.05, bulbR.position.z);
-      spotR.castShadow = true;
-      spotR.shadow.mapSize.width = 1024; spotR.shadow.mapSize.height = 1024;
+      spotR.castShadow = false;
       scene.add(spotR.target);
       scene.add(spotR);
-      // subtle cones for both spots
-      const dirL = new THREE.Vector3().subVectors(spotL.target.position, spotL.position).normalize();
-      const coneHeightL = Math.max(0.75, spotL.position.y - 0.05);
-      const baseRadiusL = Math.max(0.16, coneHeightL * Math.tan(spotL.angle) * 1.4);
-      const coneGeoL = new THREE.ConeGeometry(baseRadiusL, coneHeightL, 32, 1, true);
-      const coneMatL = new THREE.MeshStandardMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.06, depthWrite: false, side: THREE.DoubleSide });
-      const coneL = new THREE.Mesh(coneGeoL, coneMatL);
-      coneL.position.copy(spotL.position).add(dirL.clone().multiplyScalar(coneHeightL / 2));
-      const qfL = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dirL);
-      coneL.quaternion.copy(qfL);
-      coneL.rotateX(Math.PI);
-      coneL.renderOrder = 1; scene.add(coneL);
-      const dirR = new THREE.Vector3().subVectors(spotR.target.position, spotR.position).normalize();
-      const coneHeightR = Math.max(0.75, spotR.position.y - 0.05);
-      const baseRadiusR = Math.max(0.16, coneHeightR * Math.tan(spotR.angle) * 1.4);
-      const coneGeoR = new THREE.ConeGeometry(baseRadiusR, coneHeightR, 32, 1, true);
-      const coneR = new THREE.Mesh(coneGeoR, coneMatL.clone());
-      coneR.position.copy(spotR.position).add(dirR.clone().multiplyScalar(coneHeightR / 2));
-      const qfR = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dirR);
-      coneR.quaternion.copy(qfR);
-      coneR.rotateX(Math.PI);
-      coneR.renderOrder = 1; scene.add(coneR);
+      registerStreetLight(spotR);
+      addFallbackConeFromSpot(spotR);
+
+      try {
+        scene.userData.streetLightMeshes = scene.userData.streetLightMeshes || [];
+        bulbL.userData = bulbL.userData || {};
+        bulbL.userData._origEmissiveIntensity = (bulbL.material && bulbL.material.emissiveIntensity !== undefined) ? bulbL.material.emissiveIntensity : 1;
+        scene.userData.streetLightMeshes.push(bulbL);
+        bulbR.userData = bulbR.userData || {};
+        bulbR.userData._origEmissiveIntensity = (bulbR.material && bulbR.material.emissiveIntensity !== undefined) ? bulbR.material.emissiveIntensity : 1;
+        scene.userData.streetLightMeshes.push(bulbR);
+        if (scene.userData.isDay) {
+          if (bulbL.material && bulbL.material.emissive !== undefined) bulbL.material.emissiveIntensity = 0;
+          if (bulbR.material && bulbR.material.emissive !== undefined) bulbR.material.emissiveIntensity = 0;
+        }
+      } catch (e) {
+        console.warn('Failed to register fallback garden bulbs', e);
+      }
     }
   });
   // Replace previous arch with a simpler, torii-style entry and put the text on the top beam

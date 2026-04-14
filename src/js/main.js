@@ -562,27 +562,28 @@ const pointerLockState = initPointerLock();
 controls = pointerLockState.controls;
 const updateMovement = pointerLockState.updateMovement;
 
-// Lights (night mode)
+// Lights (night mode setup - will be adjusted by applyDayNight)
 scene.add(new THREE.AmbientLight(0xffffff, 0.06));
-const dir = new THREE.DirectionalLight(0x99bbff, 0.25);
+const dir = new THREE.DirectionalLight(0x7688c0, 0.15);
 dir.position.set(5, 10, 2);
 dir.castShadow = true;
 dir.shadow.mapSize.set(2048, 2048);
 dir.shadow.camera.near = 0.5;
-dir.shadow.bias = -0.005;
+dir.shadow.bias = -0.0008;  // Better shadow quality
 dir.shadow.camera.far = 50;
-dir.shadow.camera.left = -10;
-dir.shadow.camera.right = 10;
-dir.shadow.camera.top = 10;
-dir.shadow.camera.bottom = -10;
+dir.shadow.camera.left = -12;
+dir.shadow.camera.right = 12;
+dir.shadow.camera.top = 12;
+dir.shadow.camera.bottom = -12;
+dir.shadow.blurSamples = 8;  // Soft shadow edges
 scene.add(dir);
 
-// subtle hemisphere for small ambient contrast (night sky/ground)
-const hemi = new THREE.HemisphereLight(0x081c2b, 0x04040a, 0.08);
+// Subtle hemisphere for night sky/ground ambient light
+const hemi = new THREE.HemisphereLight(0x0a1b2e, 0x02040a, 0.05);
 scene.add(hemi);
 
-// darker fog for night ambiance
-scene.fog = new THREE.FogExp2(0x02030a, 0.003);
+// Fog for night ambiance - enhanced for better atmosphere
+scene.fog = new THREE.FogExp2(0x02030a, 0.007);
 
 // Simple ground with procedurally generated grass-like texture
 function makeGrassTexture(size = 1024) {
@@ -906,76 +907,130 @@ animate();
   function applyDayNight(day) {
     // expose current day/night state for zones that create lights later
     scene.userData.isDay = Boolean(day);
+    
+    // Atmospheric setup - create distinct day/night appearance
     if (scene.fog) {
-      scene.fog.color.set(day ? 0xcde6ff : 0x02030a);
-      scene.fog.density = day ? 0.0009 : 0.003;
+      if (day) {
+        scene.fog.color.set(0xcde6ff);
+        scene.fog.density = 0.0009;
+      } else {
+        // Stronger fog at night for atmosphere and light visibility
+        scene.fog.color.set(0x02030a);
+        scene.fog.density = 0.004;
+      }
     }
+    
+    // Adjust clear color for sky gradient
     renderer.setClearColor(day ? 0xa6d8ff : 0x02030a);
 
-    // directional sunlight
-    dir.color.set(day ? 0xfff1d6 : 0x99bbff);
-    dir.intensity = day ? 0.5 : 0.25;
+    // Directional light (sun/moon)
+    // During day: warm sunlight
+    // During night: cool blue moonlight
+    if (day) {
+      dir.color.set(0xfff1d6);  // Warm daylight
+      dir.intensity = 0.6;      // Strong daytime sun
+    } else {
+      dir.color.set(0x7688c0);  // Cool night blue
+      dir.intensity = 0.15;     // Dim moonlight
+    }
 
-    // hemisphere
-    hemi.color.set(day ? 0xffffff : 0x081c2b);
-    hemi.groundColor.set(day ? 0xcfd6e6 : 0x04040a);
-    hemi.intensity = day ? 0.28 : 0.08;
+    // Hemisphere light (sky/ground ambient)
+    if (day) {
+      hemi.color.set(0xffffff);        // White sky
+      hemi.groundColor.set(0xcfd6e6);  // Light ground reflection
+      hemi.intensity = 0.35;
+    } else {
+      hemi.color.set(0x0a1b2e);        // Dark night sky
+      hemi.groundColor.set(0x02040a);  // Very dark ground
+      hemi.intensity = 0.05;
+    }
 
-    // ambient lights (may be multiple) - brighten for day
+    // Ambient lights - provide overall illumination
     const ambs = [];
     scene.traverse((o) => { if (o.isAmbientLight) ambs.push(o); });
-    for (const a of ambs) a.intensity = day ? 0.35 : 0.06;
+    for (const a of ambs) {
+      a.intensity = day ? 0.4 : 0.05;
+    }
 
-    // adjust emissive intensity for emissive materials slightly
+    // Adjust emissive materials throughout the scene
+    // During day: dim emissive (bulbs not lit)
+    // During night: full emissive (bulbs lit)
     scene.traverse((o) => {
       if (o.isMesh && o.material) {
         const m = o.material;
         if (m.emissive !== undefined) {
-          m.emissiveIntensity = day ? 0.18 : 1.0;
+          // For streetlight bulbs, turn off completely during day
+          // For other emissive materials, dim slightly
+          const isStreetlightBulb = o.userData && o.userData._origEmissiveIntensity !== undefined;
+          if (day) {
+            m.emissiveIntensity = 0;
+          } else {
+            m.emissiveIntensity = isStreetlightBulb ? 1.2 : 0.8;
+          }
         }
       }
     });
 
     // Toggle streetlight SpotLights and lamp/bulb emissives registered by zones
+    // This ensures all lights are properly controlled
     try {
       const sLights = (scene.userData && scene.userData.streetLights) ? scene.userData.streetLights : [];
       for (const sl of sLights) {
         try {
-          // keep the lamp object visible but disable its emitted light during daytime
           if (day) {
-            sl.intensity = 0;
+            sl.intensity = 0;  // Turn off during day
           } else {
-            if (sl.userData && typeof sl.userData._origIntensity === 'number') sl.intensity = sl.userData._origIntensity;
+            // Restore original intensity at night
+            if (sl.userData && typeof sl.userData._origIntensity === 'number') {
+              sl.intensity = sl.userData._origIntensity;
+            } else {
+              sl.intensity = 2.0;  // Fallback intensity
+            }
           }
-          // ensure the SpotLight object remains in the scene so lamp models stay visible
+          // Keep lights in scene at all times for efficient toggling
           sl.visible = true;
         } catch (e) {}
       }
 
+      // Toggle emissive materials on bulbs and fixtures
       const sMeshes = (scene.userData && scene.userData.streetLightMeshes) ? scene.userData.streetLightMeshes : [];
       for (const m of sMeshes) {
         try {
-          // keep the lamp meshes visible but turn off emissive during day; do NOT change mesh opacity so poles remain visible
-          m.visible = true;
+          m.visible = true;  // Keep meshes visible
           const mats = Array.isArray(m.material) ? m.material : [m.material];
           for (const mat of mats) {
             if (mat && mat.emissive !== undefined) {
-              mat.emissiveIntensity = day ? 0 : ((m.userData && typeof m.userData._origEmissiveIntensity === 'number') ? m.userData._origEmissiveIntensity : 1);
+              if (day) {
+                mat.emissiveIntensity = 0;  // Dim at day
+              } else {
+                // Restore original at night
+                mat.emissiveIntensity = (m.userData && typeof m.userData._origEmissiveIntensity === 'number') 
+                  ? m.userData._origEmissiveIntensity 
+                  : 1;
+              }
             }
           }
         } catch (e) {}
       }
-      // Explicitly toggle light cones' visibility: keep lamp posts visible, but hide/show cones at day/night
+
+      // Toggle visual light cones (decorative visualization of light spread)
       try {
         const cones = (scene.userData && scene.userData.streetLightCones) ? scene.userData.streetLightCones : [];
         for (const c of cones) {
           try {
-            c.visible = !day;
+            c.visible = !day;  // Hide cones during day
             const mats = Array.isArray(c.material) ? c.material : [c.material];
             for (const mat of mats) {
               if (mat && typeof mat.opacity === 'number') {
-                const orig = (c.userData && typeof c.userData._origOpacity === 'number') ? c.userData._origOpacity : mat.opacity;
-                mat.opacity = day ? 0 : orig;
+                if (day) {
+                  mat.opacity = 0;  // Transparent during day
+                } else {
+                  // Restore original opacity at night
+                  const orig = (c.userData && typeof c.userData._origOpacity === 'number') 
+                    ? c.userData._origOpacity 
+                    : 0.04;
+                  mat.opacity = orig;
+                }
                 mat.transparent = (mat.opacity < 1);
               }
             }
@@ -983,7 +1038,7 @@ animate();
         }
       } catch (e) {}
     } catch (e) {
-      // ignore toggling errors
+      // Silently ignore toggling errors
     }
   }
 
