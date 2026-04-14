@@ -23,6 +23,9 @@ const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerH
 camera.position.set(0, 2.0, 5);
 // global player height (camera eye height above ground)
 let PLAYER_HEIGHT = 1.6;
+const PLAYER_COLLISION_RADIUS = 0.34;
+const PLAYER_COLLISION_TOP_OFFSET = 0.2;
+const PLAYER_COLLISION_FOOT_OFFSET = 0.03;
 
 // PointerLock controls (first-person)
 let controls = null;
@@ -542,14 +545,33 @@ function initPointerLock() {
 
     // move the control object (the camera wrapper)
     if (controls.isLocked === true) {
-      controls.getObject().translateX(velocity.x * delta);
-      controls.getObject().translateZ(velocity.z * delta);
-      controls.getObject().position.y += velocity.y * delta;
+      const playerObject = controls.getObject();
+
+      const beforeXMove = playerObject.position.clone();
+      playerObject.translateX(velocity.x * delta);
+      if (isPlayerBlockedAt(playerObject.position, PLAYER_HEIGHT)) {
+        playerObject.position.copy(beforeXMove);
+        velocity.x = 0;
+      }
+
+      const beforeZMove = playerObject.position.clone();
+      playerObject.translateZ(velocity.z * delta);
+      if (isPlayerBlockedAt(playerObject.position, PLAYER_HEIGHT)) {
+        playerObject.position.copy(beforeZMove);
+        velocity.z = 0;
+      }
+
+      const beforeYMove = playerObject.position.y;
+      playerObject.position.y += velocity.y * delta;
+      if (isPlayerBlockedAt(playerObject.position, PLAYER_HEIGHT)) {
+        playerObject.position.y = beforeYMove;
+        if (velocity.y > 0) velocity.y = 0;
+      }
 
       // basic ground collision
-      if (controls.getObject().position.y < PLAYER_HEIGHT) {
+      if (playerObject.position.y < PLAYER_HEIGHT) {
         velocity.y = 0;
-        controls.getObject().position.y = PLAYER_HEIGHT;
+        playerObject.position.y = PLAYER_HEIGHT;
         canJump = true;
       }
     }
@@ -668,6 +690,83 @@ createGardenZone(scene, -18, 12);
 
 createCityZone(scene, 22, -4);
 const beachZone = createBeachZone(scene, 0, 12);
+
+const worldCollisionBoxes = [];
+const collisionProbeBox = new THREE.Box3();
+const collisionTempBox = new THREE.Box3();
+const collisionTempSize = new THREE.Vector3();
+let collisionRebuildAccumulator = 0;
+
+function hasNoCollisionAncestor(obj) {
+  let current = obj;
+  while (current) {
+    if (current.userData && current.userData.noCollision) return true;
+    current = current.parent;
+  }
+  return false;
+}
+
+function matchesCollisionExclusionByName(obj) {
+  const names = [];
+  let current = obj;
+  let steps = 0;
+  while (current && steps < 8) {
+    if (typeof current.name === 'string' && current.name) names.push(current.name.toLowerCase());
+    current = current.parent;
+    steps++;
+  }
+  const label = names.join(' ');
+  if (!label) return false;
+  return /(towel|trashbin|trash_bin|\bbin\b|\broad\b|\blane\b|asphalt)/i.test(label);
+}
+
+function shouldCreateCollisionForMesh(obj) {
+  if (!obj || !obj.isMesh) return false;
+  if (!obj.visible) return false;
+  if (obj.userData && obj.userData.noAutoCollision) return false;
+  if (hasNoCollisionAncestor(obj)) return false;
+  if (matchesCollisionExclusionByName(obj)) return false;
+
+  const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+  const hasVeryTransparentMaterial = mats.some((mat) => mat && mat.transparent && typeof mat.opacity === 'number' && mat.opacity < 0.2);
+  if (hasVeryTransparentMaterial) return false;
+
+  return true;
+}
+
+function rebuildWorldCollisionBoxes() {
+  worldCollisionBoxes.length = 0;
+  scene.updateMatrixWorld(true);
+
+  scene.traverse((obj) => {
+    if (!shouldCreateCollisionForMesh(obj)) return;
+
+    collisionTempBox.setFromObject(obj);
+    if (!Number.isFinite(collisionTempBox.min.x) || !Number.isFinite(collisionTempBox.max.x)) return;
+
+    collisionTempBox.getSize(collisionTempSize);
+    if (collisionTempSize.y < 0.2) return;
+    if (Math.max(collisionTempSize.x, collisionTempSize.z) < 0.08) return;
+
+    worldCollisionBoxes.push(collisionTempBox.clone());
+  });
+}
+
+function isPlayerBlockedAt(position, eyeHeight = PLAYER_HEIGHT) {
+  if (!worldCollisionBoxes.length) return false;
+
+  const minY = position.y - eyeHeight + PLAYER_COLLISION_FOOT_OFFSET;
+  const maxY = position.y + PLAYER_COLLISION_TOP_OFFSET;
+  collisionProbeBox.min.set(position.x - PLAYER_COLLISION_RADIUS, minY, position.z - PLAYER_COLLISION_RADIUS);
+  collisionProbeBox.max.set(position.x + PLAYER_COLLISION_RADIUS, maxY, position.z + PLAYER_COLLISION_RADIUS);
+
+  for (const box of worldCollisionBoxes) {
+    if (collisionProbeBox.intersectsBox(box)) return true;
+  }
+  return false;
+}
+
+rebuildWorldCollisionBoxes();
 
 function shouldAutoShadowMesh(obj) {
   if (!obj || !obj.isMesh) return false;
@@ -1010,6 +1109,13 @@ function animate() {
   if (shadowSyncAccumulator >= 0.25) {
     shadowSyncAccumulator = 0;
     syncSceneMeshShadows(renderer.shadowMap.enabled);
+  }
+
+  // Refresh collision volumes periodically so async-loaded objects become collidable.
+  collisionRebuildAccumulator += dt;
+  if (collisionRebuildAccumulator >= 1.0) {
+    collisionRebuildAccumulator = 0;
+    rebuildWorldCollisionBoxes();
   }
 
   streetLightShadowSyncAccumulator += dt;

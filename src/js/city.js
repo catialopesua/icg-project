@@ -16,21 +16,29 @@ export function createCityZone(scene, cx, cz){
     road.rotation.x = -Math.PI / 2;
     road.position.set(x, 0.012, z);
     road.receiveShadow = true;
+    road.userData = road.userData || {};
+    road.userData.noCollision = true;
     scene.add(road);
 
     const line = new THREE.Mesh(new THREE.PlaneGeometry(horizontal ? length : 0.14, horizontal ? 0.14 : length), laneLineMat);
     line.rotation.x = -Math.PI / 2;
     line.position.set(x, 0.013, z);
+    line.userData = line.userData || {};
+    line.userData.noCollision = true;
     scene.add(line);
 
     const sideOffset = width / 2 + 0.55;
     const sidewalkA = new THREE.Mesh(new THREE.PlaneGeometry(horizontal ? length : 1.1, horizontal ? 1.1 : length), sidewalkMat);
     sidewalkA.rotation.x = -Math.PI / 2;
     sidewalkA.position.set(horizontal ? x : x - sideOffset, 0.011, horizontal ? z - sideOffset : z);
+    sidewalkA.userData = sidewalkA.userData || {};
+    sidewalkA.userData.noCollision = true;
     scene.add(sidewalkA);
 
     const sidewalkB = sidewalkA.clone();
     sidewalkB.position.set(horizontal ? x : x + sideOffset, 0.011, horizontal ? z + sideOffset : z);
+    sidewalkB.userData = sidewalkB.userData || {};
+    sidewalkB.userData.noCollision = true;
     scene.add(sidewalkB);
 
     // record road area for later placement checks
@@ -512,6 +520,8 @@ export function createCityZone(scene, cx, cz){
     for (const s of placedCityLights) {
       try {
         const bin = binModel.clone(true);
+        bin.userData = bin.userData || {};
+        bin.userData.noCollision = true;
         // scale bin to target height
         const box = new THREE.Box3().setFromObject(bin);
         const size = new THREE.Vector3();
@@ -560,10 +570,14 @@ export function createCityZone(scene, cx, cz){
 
   loader.load('./models/City/trashbin.glb', (gltf) => {
     const binModel = gltf.scene;
+    binModel.userData = binModel.userData || {};
+    binModel.userData.noCollision = true;
     binModel.traverse((n) => {
       if (n.isMesh) {
         n.castShadow = true;
         n.receiveShadow = true;
+        n.userData = n.userData || {};
+        n.userData.noCollision = true;
       }
     });
 
@@ -571,6 +585,8 @@ export function createCityZone(scene, cx, cz){
 
     for (const s of beachLightSpots) {
       const bin = binModel.clone(true);
+      bin.userData = bin.userData || {};
+      bin.userData.noCollision = true;
       const box = new THREE.Box3().setFromObject(bin);
       const size = new THREE.Vector3();
       box.getSize(size);
@@ -617,6 +633,8 @@ export function createCityZone(scene, cx, cz){
       );
       bmesh.position.set(candX, 0.23, candZ);
       bmesh.castShadow = true;
+      bmesh.userData = bmesh.userData || {};
+      bmesh.userData.noCollision = true;
       scene.add(bmesh);
     }
     // also attempt to place fallback bins for city lights later

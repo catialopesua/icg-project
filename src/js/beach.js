@@ -309,6 +309,8 @@ export function createBeachZone(scene, parkCx, parkCz) {
         towel.rotation.y = Math.PI / 2;
         towel.castShadow = true;
         towel.receiveShadow = true;
+        towel.userData = towel.userData || {};
+        towel.userData.noCollision = true;
         group.add(towel);
 
         // umbrella near many towels according to umbrellaProb
