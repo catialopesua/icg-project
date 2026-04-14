@@ -26,6 +26,8 @@ let PLAYER_HEIGHT = 1.6;
 const PLAYER_COLLISION_RADIUS = 0.34;
 const PLAYER_COLLISION_TOP_OFFSET = 0.2;
 const PLAYER_COLLISION_FOOT_OFFSET = 0.03;
+const PLAYER_SUPPORT_SNAP_DOWN = 0.55;
+const PLAYER_SUPPORT_SNAP_UP = 0.12;
 
 // PointerLock controls (first-person)
 let controls = null;
@@ -568,10 +570,26 @@ function initPointerLock() {
         if (velocity.y > 0) velocity.y = 0;
       }
 
-      // basic ground collision
+      // Grounding on terrain or object tops so jumping works from elevated surfaces.
+      const supportY = getSupportSurfaceY(playerObject.position, PLAYER_HEIGHT);
+      if (supportY !== null) {
+        const targetEyeY = supportY + PLAYER_HEIGHT;
+        const canSnapToSupport = velocity.y <= 0 && playerObject.position.y <= targetEyeY + PLAYER_SUPPORT_SNAP_UP;
+        if (canSnapToSupport) {
+          playerObject.position.y = targetEyeY;
+          velocity.y = 0;
+          canJump = true;
+        } else {
+          canJump = Math.abs(playerObject.position.y - targetEyeY) <= 0.015;
+        }
+      } else {
+        canJump = false;
+      }
+
+      // Hard fallback: never allow sinking below the base world floor.
       if (playerObject.position.y < PLAYER_HEIGHT) {
-        velocity.y = 0;
         playerObject.position.y = PLAYER_HEIGHT;
+        velocity.y = 0;
         canJump = true;
       }
     }
@@ -745,7 +763,7 @@ function rebuildWorldCollisionBoxes() {
     if (!Number.isFinite(collisionTempBox.min.x) || !Number.isFinite(collisionTempBox.max.x)) return;
 
     collisionTempBox.getSize(collisionTempSize);
-    if (collisionTempSize.y < 0.2) return;
+    if (collisionTempSize.y < 0.04) return;
     if (Math.max(collisionTempSize.x, collisionTempSize.z) < 0.08) return;
 
     worldCollisionBoxes.push(collisionTempBox.clone());
@@ -764,6 +782,31 @@ function isPlayerBlockedAt(position, eyeHeight = PLAYER_HEIGHT) {
     if (collisionProbeBox.intersectsBox(box)) return true;
   }
   return false;
+}
+
+function getSupportSurfaceY(position, eyeHeight = PLAYER_HEIGHT) {
+  const footY = position.y - eyeHeight;
+  const minCheckY = footY - PLAYER_SUPPORT_SNAP_DOWN;
+  const maxCheckY = footY + PLAYER_SUPPORT_SNAP_UP;
+  const minX = position.x - PLAYER_COLLISION_RADIUS;
+  const maxX = position.x + PLAYER_COLLISION_RADIUS;
+  const minZ = position.z - PLAYER_COLLISION_RADIUS;
+  const maxZ = position.z + PLAYER_COLLISION_RADIUS;
+
+  let bestY = null;
+
+  // Base world floor at y=0 remains a valid support surface.
+  if (0 >= minCheckY && 0 <= maxCheckY) bestY = 0;
+
+  for (const box of worldCollisionBoxes) {
+    const topY = box.max.y;
+    if (topY < minCheckY || topY > maxCheckY) continue;
+    if (box.max.x < minX || box.min.x > maxX) continue;
+    if (box.max.z < minZ || box.min.z > maxZ) continue;
+    if (bestY === null || topY > bestY) bestY = topY;
+  }
+
+  return bestY;
 }
 
 rebuildWorldCollisionBoxes();

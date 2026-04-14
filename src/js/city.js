@@ -65,7 +65,7 @@ export function createCityZone(scene, cx, cz){
   // Global multiplier and per-model scale overrides.
   // Set `BUILDING_SCALE_MULTIPLIER` to 1.0 for no global change; adjust per-model scales below.
   const BUILDING_SCALE_MULTIPLIER = 1.0;
-  const BUILDING_MODEL_SCALES = { 1: 1.8, 2: 1.8};
+  const BUILDING_MODEL_SCALES = { 1: 1.8, 2: 1.8, 3: 1.8};
 
   function dirToRot(dir) {
     if (!dir || typeof dir !== 'string') return 0;
@@ -140,7 +140,7 @@ export function createCityZone(scene, cx, cz){
     { model: 1, x: cx - 14.8,  z: cz - 25, dir: 'W' },
     { model: 2, x: cx + 7.5,  z: cz - 25, dir: 'W' },
     { model: 2, x: cx + 14.8,  z: cz - 25, dir: 'W' },
-    { model: 2, x: cx ,  z: cz - 25, dir: 'W' }
+    { model: 3, x: cx ,  z: cz - 25, dir: 'W' }
 
   ];
 
@@ -665,5 +665,18 @@ export function createCityZone(scene, cx, cz){
     }
   }, undefined, (err) => {
     console.warn('Failed to load building2.glb', err);
+  });
+
+  loader.load('./models/City/building3.glb', (gltf3) => {
+    const model3 = gltf3.scene;
+    for (const p of validPlacements) {
+      if (p.model === 3) {
+        const y = (typeof p.y === 'number') ? p.y : undefined;
+        const rot = (typeof p.dir === 'string') ? p.dir : (typeof p.rotY === 'number' ? p.rotY : undefined);
+        placeBuilding(model3, p.x, y, p.z, rot, BUILDING_MODEL_SCALES[3]);
+      }
+    }
+  }, undefined, (err) => {
+    console.warn('Failed to load building3.glb', err);
   });
 }
