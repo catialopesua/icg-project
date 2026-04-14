@@ -568,7 +568,7 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.06));
 const DAY_LIGHT_POS = new THREE.Vector3(62, 56, -32);
 const NIGHT_LIGHT_POS = new THREE.Vector3(-24, 26, -16);
 const SHADOW_TARGET_POS = new THREE.Vector3(2, 0, 14);
-const DAY_SHADOW_BOUNDS = 52;
+const DAY_SHADOW_BOUNDS = 46;
 const NIGHT_SHADOW_BOUNDS = 44;
 const MAX_DYNAMIC_NIGHT_STREETLIGHT_SHADOWS = 2;
 const NIGHT_STREETLIGHT_SHADOW_RANGE = 24;
@@ -1051,7 +1051,7 @@ animate();
     if (scene.fog) {
       if (day) {
         scene.fog.color.set(0xcde6ff);
-        scene.fog.density = 0.0009;
+        scene.fog.density = 0.00075;
       } else {
         // Stronger fog at night for atmosphere and light visibility
         scene.fog.color.set(0x02030a);
@@ -1065,12 +1065,15 @@ animate();
     // Directional light and shadows are intentionally different between day and night.
     if (day) {
       dir.color.set(0xfff1d6);
-      dir.intensity = 0.68;
+      dir.intensity = 0.78;
       dir.position.copy(DAY_LIGHT_POS);
       dir.shadow.mapSize.set(4096, 4096);
-      dir.shadow.bias = -0.00035;
-      dir.shadow.normalBias = 0.02;
-      dir.shadow.radius = 2;
+      dir.shadow.bias = -0.00022;
+      dir.shadow.normalBias = 0.014;
+      dir.shadow.radius = 1.2;
+      dir.shadow.blurSamples = 6;
+      dir.shadow.camera.near = 0.5;
+      dir.shadow.camera.far = 110;
       dir.shadow.camera.left = -DAY_SHADOW_BOUNDS;
       dir.shadow.camera.right = DAY_SHADOW_BOUNDS;
       dir.shadow.camera.top = DAY_SHADOW_BOUNDS;
@@ -1085,6 +1088,9 @@ animate();
       dir.shadow.bias = -0.001;
       dir.shadow.normalBias = 0.03;
       dir.shadow.radius = 4;
+      dir.shadow.blurSamples = 8;
+      dir.shadow.camera.near = 0.5;
+      dir.shadow.camera.far = 140;
       dir.shadow.camera.left = -NIGHT_SHADOW_BOUNDS;
       dir.shadow.camera.right = NIGHT_SHADOW_BOUNDS;
       dir.shadow.camera.top = NIGHT_SHADOW_BOUNDS;
@@ -1102,7 +1108,7 @@ animate();
     if (day) {
       hemi.color.set(0xffffff);        // White sky
       hemi.groundColor.set(0xcfd6e6);  // Light ground reflection
-      hemi.intensity = 0.35;
+      hemi.intensity = 0.26;
     } else {
       hemi.color.set(0x0a1b2e);        // Dark night sky
       hemi.groundColor.set(0x02040a);  // Very dark ground
@@ -1113,7 +1119,7 @@ animate();
     const ambs = [];
     scene.traverse((o) => { if (o.isAmbientLight) ambs.push(o); });
     for (const a of ambs) {
-      a.intensity = day ? 0.4 : 0.015;
+      a.intensity = day ? 0.24 : 0.035;
     }
 
     // Adjust emissive materials throughout the scene
