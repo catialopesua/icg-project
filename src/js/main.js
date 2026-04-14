@@ -28,6 +28,8 @@ const PLAYER_COLLISION_TOP_OFFSET = 0.2;
 const PLAYER_COLLISION_FOOT_OFFSET = 0.03;
 const PLAYER_SUPPORT_SNAP_DOWN = 0.55;
 const PLAYER_SUPPORT_SNAP_UP = 0.12;
+const PLAYER_JUMP_VELOCITY = 5.0;
+const PLAYER_GRAVITY = 12.5;
 
 // PointerLock controls (first-person)
 let controls = null;
@@ -437,7 +439,7 @@ function initPointerLock() {
       case 'ShiftRight': moveState.sprint = true; break;
       case 'Space':
         if (canJump === true) {
-          velocity.y += 6.5;
+          velocity.y += PLAYER_JUMP_VELOCITY;
           canJump = false;
         }
         break;
@@ -522,7 +524,7 @@ function initPointerLock() {
     const damping = 10.0;
 
     // apply gravity
-    velocity.y -= 9.8 * delta;
+    velocity.y -= PLAYER_GRAVITY * delta;
 
     // compute direction from input (forward = W, left = A)
     direction.x = Number(moveState.left) - Number(moveState.right);

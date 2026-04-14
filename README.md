@@ -1,5 +1,5 @@
 # Game is deployed in:
-https://catialopesua.github.io/icg-project/testing.html
+https://catialopesua.github.io/icg-project/play.html
 
 ### Game Goal:
 Help Tim find his 5 friends scattered across the map so they can all celebrate his birthday party together.
