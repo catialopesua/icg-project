@@ -9,7 +9,7 @@ function makeCanvasTextTexture(text, opts = {}){
   ctx.fillRect(0,0,w,h);
   ctx.fillStyle = opts.color || '#fff';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `${opts.fontSize||48}px sans-serif`;
+  ctx.font = `${opts.fontSize||98}px ${opts.font || 'sans-serif'}`;
   ctx.fillText(text, w/2, h/2);
   const tex = new THREE.CanvasTexture(canvas); tex.needsUpdate = true; return tex;
 }
@@ -350,18 +350,10 @@ export function createGardenZone(scene, cx, cz){
     archGroup.add(nuki);
 
     // 'Park' text on the front face of the top beam
-    const textTex = makeCanvasTextTexture('Park', { width: 1024, height: 256, bg: '#8b5a2b', color: '#fff9e6', fontSize: 110 });
-    const textPlane = new THREE.Mesh(new THREE.PlaneGeometry(archWidth * 0.6, 0.5), new THREE.MeshBasicMaterial({ map: textTex, transparent: true }));
+    const textTex = makeCanvasTextTexture('Park', { width: 1024, height: 256, bg: '#8b5a2b', color: '#fff9e6', fontSize: 170, font: 'serif' });
+    const textPlane = new THREE.Mesh(new THREE.PlaneGeometry(archWidth * 0.6, 0.5), new THREE.MeshStandardMaterial({ map: textTex, transparent: true, roughness: 0.8, metalness: 0 }));
     textPlane.position.set(cx, archHeight - 0.25, cz + 1.0 + beamDepth/2 + 0.01);
     archGroup.add(textPlane);
-
-    // small ambient spot to highlight the torii at night
-    const rimLight = new THREE.SpotLight(0xffecd1, 0.6, 8, Math.PI/8, 0.5, 1.5);
-    rimLight.position.set(cx, archHeight + 0.6, cz + 1.2);
-    rimLight.target.position.set(cx, archHeight - 0.25, cz + 1.0);
-    rimLight.castShadow = true;
-    scene.add(rimLight.target);
-    scene.add(rimLight);
 
     scene.add(archGroup);
   })();
