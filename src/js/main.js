@@ -658,7 +658,7 @@ function makeCelestialBody(coreColor, haloColor, radius, haloScale = 1.75, haloO
   return group;
 }
 
-const sun = makeCelestialBody(0xfffbf0, 0xfff2dc, 2.2, 1.8, 0.24);
+const sun = makeCelestialBody(0xfffbf0, 0xfff2dc, 2.2, 3.8, 0.24);
 sun.position.copy(DAY_LIGHT_POS);
 sun.visible = false;
 scene.add(sun);
@@ -1309,7 +1309,7 @@ animate();
       dir.shadow.radius = 1.2;
       dir.shadow.blurSamples = 6;
       dir.shadow.camera.near = 0.5;
-      dir.shadow.camera.far = 110;
+      dir.shadow.camera.far = 170;
       dir.shadow.camera.left = -DAY_SHADOW_BOUNDS;
       dir.shadow.camera.right = DAY_SHADOW_BOUNDS;
       dir.shadow.camera.top = DAY_SHADOW_BOUNDS;
