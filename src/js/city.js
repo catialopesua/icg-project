@@ -11,6 +11,81 @@ export function createCityZone(scene, cx, cz){
   scene.userData.streetLights = scene.userData.streetLights || [];
   scene.userData.streetLightMeshes = scene.userData.streetLightMeshes || [];
 
+  const CENTER_DASH_LENGTH = 2;
+  const CENTER_DASH_GAP = 3.4;
+  const CENTER_LINE_WIDTH = 0.18;
+  const CENTER_LINE_END_MARGIN = 0.9;
+
+  function mergeIntervals(intervals, joinGap = 0.01) {
+    if (!intervals.length) return [];
+    const sorted = [...intervals].sort((a, b) => a[0] - b[0]);
+    const merged = [sorted[0].slice()];
+
+    for (let i = 1; i < sorted.length; i++) {
+      const [start, end] = sorted[i];
+      const last = merged[merged.length - 1];
+      if (start <= last[1] + joinGap) {
+        last[1] = Math.max(last[1], end);
+      } else {
+        merged.push([start, end]);
+      }
+    }
+
+    return merged;
+  }
+
+  function addDashedInterval(start, end, horizontal, fixedCoord) {
+    const span = end - start;
+    if (span < CENTER_DASH_LENGTH) return;
+
+    const step = CENTER_DASH_LENGTH + CENTER_DASH_GAP;
+    const dashCount = Math.max(1, Math.floor((span + CENTER_DASH_GAP) / step));
+    const occupiedLength = dashCount * CENTER_DASH_LENGTH + (dashCount - 1) * CENTER_DASH_GAP;
+    const leading = start + (span - occupiedLength) / 2;
+
+    for (let i = 0; i < dashCount; i++) {
+      const centerAlong = leading + i * step + CENTER_DASH_LENGTH / 2;
+      const dash = new THREE.Mesh(
+        new THREE.PlaneGeometry(horizontal ? CENTER_DASH_LENGTH : CENTER_LINE_WIDTH, horizontal ? CENTER_LINE_WIDTH : CENTER_DASH_LENGTH),
+        laneLineMat
+      );
+      dash.rotation.x = -Math.PI / 2;
+      dash.position.set(horizontal ? centerAlong : fixedCoord, 0.013, horizontal ? fixedCoord : centerAlong);
+      dash.userData = dash.userData || {};
+      dash.userData.noCollision = true;
+      scene.add(dash);
+    }
+  }
+
+  function buildDashedCenterLines() {
+    const groups = new Map();
+
+    for (const road of roads) {
+      const key = road.horizontal ? `h:${road.z.toFixed(4)}` : `v:${road.x.toFixed(4)}`;
+      const alongCenter = road.horizontal ? road.x : road.z;
+      const start = alongCenter - road.length / 2 + CENTER_LINE_END_MARGIN;
+      const end = alongCenter + road.length / 2 - CENTER_LINE_END_MARGIN;
+      if (end <= start) continue;
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          horizontal: road.horizontal,
+          fixedCoord: road.horizontal ? road.z : road.x,
+          intervals: []
+        });
+      }
+
+      groups.get(key).intervals.push([start, end]);
+    }
+
+    for (const group of groups.values()) {
+      const merged = mergeIntervals(group.intervals);
+      for (const [start, end] of merged) {
+        addDashedInterval(start, end, group.horizontal, group.fixedCoord);
+      }
+    }
+  }
+
   function addRoad(width, length, x, z, horizontal = true) {
     const road = new THREE.Mesh(new THREE.PlaneGeometry(horizontal ? length : width, horizontal ? width : length), roadMat);
     road.rotation.x = -Math.PI / 2;
@@ -19,13 +94,6 @@ export function createCityZone(scene, cx, cz){
     road.userData = road.userData || {};
     road.userData.noCollision = true;
     scene.add(road);
-
-    const line = new THREE.Mesh(new THREE.PlaneGeometry(horizontal ? length : 0.14, horizontal ? 0.14 : length), laneLineMat);
-    line.rotation.x = -Math.PI / 2;
-    line.position.set(x, 0.013, z);
-    line.userData = line.userData || {};
-    line.userData.noCollision = true;
-    scene.add(line);
 
     const sideOffset = width / 2 + 0.55;
     const sidewalkA = new THREE.Mesh(new THREE.PlaneGeometry(horizontal ? length : 1.1, horizontal ? 1.1 : length), sidewalkMat);
@@ -50,16 +118,17 @@ export function createCityZone(scene, cx, cz){
 
   const eastWestRoadLength = Math.abs(cx - beachPathX) + 10;
   const eastWestRoadCenterX = (cx + beachPathX) / 2 + 5;
-  addRoad(3.6, eastWestRoadLength, eastWestRoadCenterX, beachPathBranchZ - 2, true);
+  addRoad(3.6, eastWestRoadLength - 9, eastWestRoadCenterX - 4, beachPathBranchZ - 2, true);
 
   const northSouthRoadLength = Math.abs(beachPathBranchZ - cz) + 12;
   const northSouthRoadCenterZ = (beachPathBranchZ + cz) / 2;
-  addRoad(3.6, northSouthRoadLength, cx, northSouthRoadCenterZ, false);
+  addRoad(4.2, northSouthRoadLength, cx, northSouthRoadCenterZ, false);
 
   addRoad(4.2, 34, cx, cz, true);
   addRoad(4.2, 28 + 15, cx, cz, false);
   addRoad(3.2, 26 + 15, cx, cz + 13, true);
   addRoad(3.2, 22 + 15, cx, cz - 18, true);
+  buildDashedCenterLines();
 
   const loader = new GLTFLoader();
   // Global multiplier and per-model scale overrides.
