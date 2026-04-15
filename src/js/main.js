@@ -680,26 +680,111 @@ function makeGrassTexture(size = 1024) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
-  // base
-  ctx.fillStyle = '#4a8b3b';
+
+  // Rich base green so grass stays visible under night lighting.
+  ctx.fillStyle = '#3f7a35';
   ctx.fillRect(0, 0, size, size);
-  // stripes / variation
-  for (let i = 0; i < 2000; i++) {
+
+  // Broad tonal patches to break repetition.
+  for (let i = 0; i < 650; i++) {
     const x = Math.random() * size;
     const y = Math.random() * size;
-    const w = Math.random() * 2 + 0.5;
-    ctx.fillStyle = `rgba(${60 + Math.random()*40},${110 + Math.random()*40},${40 + Math.random()*30},${0.06 + Math.random()*0.12})`;
-    ctx.fillRect(x, y, w, 1 + Math.random() * 2);
+    const r = Math.random() * (size * 0.09);
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    const h = 90 + Math.floor(Math.random() * 32);
+    const s = 30 + Math.floor(Math.random() * 32);
+    const l = 26 + Math.floor(Math.random() * 20);
+    g.addColorStop(0, `hsla(${h}, ${s}%, ${l}%, ${0.08 + Math.random() * 0.09})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
   }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(8, 8);
-  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  return tex;
+
+  // Dense micro-blades so the floor reads as grass, not leaves.
+  const bladeCount = Math.floor((size * size) / 62);
+  for (let i = 0; i < bladeCount; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const len = 3 + Math.random() * 10;
+    const bend = (Math.random() - 0.5) * 1.0;
+    const hue = 94 + Math.floor(Math.random() * 26);
+    const sat = 38 + Math.floor(Math.random() * 34);
+    const light = 24 + Math.floor(Math.random() * 26);
+    const alpha = 0.24 + Math.random() * 0.30;
+    const width = 0.45 + Math.random() * 1.0;
+
+    ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${light}%, ${alpha})`;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(x + bend * len * 0.45, y - len * 0.5, x + bend * len, y - len);
+    ctx.stroke();
+  }
+
+  // Small dry/bright speckles to keep the texture natural.
+  for (let i = 0; i < 3800; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const r = 0.25 + Math.random() * 1.0;
+    const v = 130 + Math.floor(Math.random() * 70);
+    ctx.fillStyle = `rgba(${v},${Math.max(0, v + 8)},${Math.max(0, v - 60)},${0.025 + Math.random() * 0.055})`;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Build a bump map with fine directional strokes to fake blade relief.
+  const bumpCanvas = document.createElement('canvas');
+  bumpCanvas.width = bumpCanvas.height = Math.max(256, size / 2);
+  const bctx = bumpCanvas.getContext('2d');
+  bctx.fillStyle = '#7f7f7f';
+  bctx.fillRect(0, 0, bumpCanvas.width, bumpCanvas.height);
+
+  const bumpBlades = Math.floor((bumpCanvas.width * bumpCanvas.height) / 120);
+  for (let i = 0; i < bumpBlades; i++) {
+    const x = Math.random() * bumpCanvas.width;
+    const y = Math.random() * bumpCanvas.height;
+    const len = 1.5 + Math.random() * 4.5;
+    const bend = (Math.random() - 0.5) * 0.8;
+    const v = 126 + Math.floor(Math.random() * 56);
+    bctx.strokeStyle = `rgba(${v},${v},${v},${0.10 + Math.random() * 0.22})`;
+    bctx.lineWidth = 0.5 + Math.random() * 0.9;
+    bctx.beginPath();
+    bctx.moveTo(x, y);
+    bctx.quadraticCurveTo(x + bend * len * 0.4, y - len * 0.5, x + bend * len, y - len);
+    bctx.stroke();
+  }
+
+  for (let i = 0; i < 1500; i++) {
+    const x = Math.random() * bumpCanvas.width;
+    const y = Math.random() * bumpCanvas.height;
+    const r = 0.3 + Math.random() * 1.2;
+    const v = 110 + Math.floor(Math.random() * 50);
+    bctx.fillStyle = `rgba(${v},${v},${v},${0.04 + Math.random() * 0.1})`;
+    bctx.beginPath(); bctx.arc(x, y, r, 0, Math.PI * 2); bctx.fill();
+  }
+
+  const map = new THREE.CanvasTexture(canvas);
+  map.wrapS = map.wrapT = THREE.RepeatWrapping;
+  map.repeat.set(9, 9);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  const bump = new THREE.CanvasTexture(bumpCanvas);
+  bump.wrapS = bump.wrapT = THREE.RepeatWrapping;
+  bump.repeat.copy(map.repeat);
+
+  return { map, bump };
 }
 
 const groundGeo = new THREE.PlaneGeometry(80, 80);
-const groundMat = new THREE.MeshStandardMaterial({ map: makeGrassTexture(), roughness: 1 });
+const groundTex = makeGrassTexture();
+const groundMat = new THREE.MeshStandardMaterial({
+  color: 0x95c878,
+  map: groundTex.map,
+  bumpMap: groundTex.bump,
+  roughness: 0.96,
+  metalness: 0
+});
+groundMat.bumpScale = 0.05;
 const ground = new THREE.Mesh(groundGeo, groundMat);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;

@@ -11,6 +11,97 @@ export function createCityZone(scene, cx, cz){
   scene.userData.streetLights = scene.userData.streetLights || [];
   scene.userData.streetLightMeshes = scene.userData.streetLightMeshes || [];
 
+  // Procedural sidewalk textures (keeps size/location unchanged)
+  function makeSidewalkTextureSet(size = 1024) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // base concrete color
+    ctx.fillStyle = '#f5f5f5';
+    ctx.fillRect(0, 0, size, size);
+
+    // fine speckle for aggregate
+    for (let i = 0; i < 9000; i++) {
+      const x = Math.random() * size;
+      const y = Math.random() * size;
+      const r = 0.3 + Math.random() * 1.1;
+      const g = 150 + Math.floor(Math.random() * 70);
+      ctx.fillStyle = `rgba(${g},${g},${g},${0.03 + Math.random() * 0.09})`;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // slab joints (subtle grid)
+    const slabs = 6;
+    const step = Math.floor(size / slabs);
+    ctx.strokeStyle = 'rgba(80,80,80,0.38)';
+    ctx.lineWidth = Math.max(1, Math.floor(size * 0.004));
+    for (let i = 1; i < slabs; i++) {
+      const pos = i * step + (Math.random() - 0.5) * step * 0.06;
+      ctx.beginPath(); ctx.moveTo(pos, 0); ctx.lineTo(pos, size); ctx.stroke();
+      const pos2 = i * step + (Math.random() - 0.5) * step * 0.06;
+      ctx.beginPath(); ctx.moveTo(0, pos2); ctx.lineTo(size, pos2); ctx.stroke();
+    }
+
+    // subtle hairline cracks
+    ctx.strokeStyle = 'rgba(50,50,50,0.16)';
+    ctx.lineWidth = 1;
+    for (let c = 0; c < 28; c++) {
+      let x = Math.random() * size;
+      let y = Math.random() * size;
+      const segs = 3 + Math.floor(Math.random() * 4);
+      ctx.beginPath(); ctx.moveTo(x, y);
+      for (let s = 0; s < segs; s++) {
+        x += (Math.random() - 0.5) * step * 0.45;
+        y += (Math.random() - 0.5) * step * 0.45;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    const map = new THREE.CanvasTexture(canvas);
+    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+    map.colorSpace = THREE.SRGBColorSpace;
+
+    // bump map (grayscale noise)
+    const bump = document.createElement('canvas');
+    bump.width = bump.height = Math.max(256, size / 2);
+    const bctx = bump.getContext('2d');
+    bctx.fillStyle = '#b8b8b8'; bctx.fillRect(0, 0, bump.width, bump.height);
+    for (let i = 0; i < 6000; i++) {
+      const x = Math.random() * bump.width;
+      const y = Math.random() * bump.height;
+      const r = 0.4 + Math.random() * 1.2;
+      const v = 120 + Math.floor(Math.random() * 80);
+      bctx.fillStyle = `rgba(${v},${v},${v},${0.06 + Math.random() * 0.14})`;
+      bctx.beginPath(); bctx.arc(x, y, r, 0, Math.PI * 2); bctx.fill();
+    }
+    const bumpTex = new THREE.CanvasTexture(bump);
+    bumpTex.wrapS = bumpTex.wrapT = THREE.RepeatWrapping;
+
+    return { map, bump: bumpTex };
+  }
+
+  function cloneTextureWithRepeat(tex, rx, ry) {
+    if (!tex) return null;
+    const c = tex.clone();
+    c.wrapS = c.wrapT = THREE.RepeatWrapping;
+    c.repeat.set(rx, ry);
+    c.needsUpdate = true;
+    return c;
+  }
+
+  function applySidewalkTexture(material, textureSet, repeatX, repeatY) {
+    if (!material || !textureSet) return;
+    material.map = cloneTextureWithRepeat(textureSet.map, repeatX, repeatY);
+    if (textureSet.bump) material.bumpMap = cloneTextureWithRepeat(textureSet.bump, repeatX, repeatY);
+    material.roughness = 0.92;
+    material.bumpScale = 0.06;
+    material.needsUpdate = true;
+  }
+
+  const sidewalkTexturesCity = makeSidewalkTextureSet(1024);
+
   const CENTER_DASH_LENGTH = 2;
   const CENTER_DASH_GAP = 3.4;
   const CENTER_LINE_WIDTH = 0.18;
@@ -96,14 +187,19 @@ export function createCityZone(scene, cx, cz){
     scene.add(road);
 
     const sideOffset = width / 2 + 0.55;
-    const sidewalkA = new THREE.Mesh(new THREE.PlaneGeometry(horizontal ? length : 1.1, horizontal ? 1.1 : length), sidewalkMat);
+    const sidewalkSpanX = horizontal ? length : 1.1;
+    const sidewalkSpanZ = horizontal ? 1.1 : length;
+    const sidewalkA = new THREE.Mesh(new THREE.PlaneGeometry(sidewalkSpanX, sidewalkSpanZ), sidewalkMat.clone());
+    applySidewalkTexture(sidewalkA.material, sidewalkTexturesCity, Math.max(1, sidewalkSpanX / 1.5), Math.max(1, sidewalkSpanZ / 1.5));
     sidewalkA.rotation.x = -Math.PI / 2;
     sidewalkA.position.set(horizontal ? x : x - sideOffset, 0.011, horizontal ? z - sideOffset : z);
     sidewalkA.userData = sidewalkA.userData || {};
     sidewalkA.userData.noCollision = true;
     scene.add(sidewalkA);
 
-    const sidewalkB = sidewalkA.clone();
+    const sidewalkB = new THREE.Mesh(new THREE.PlaneGeometry(sidewalkSpanX, sidewalkSpanZ), sidewalkMat.clone());
+    applySidewalkTexture(sidewalkB.material, sidewalkTexturesCity, Math.max(1, sidewalkSpanX / 1.5), Math.max(1, sidewalkSpanZ / 1.5));
+    sidewalkB.rotation.x = -Math.PI / 2;
     sidewalkB.position.set(horizontal ? x : x + sideOffset, 0.011, horizontal ? z + sideOffset : z);
     sidewalkB.userData = sidewalkB.userData || {};
     sidewalkB.userData.noCollision = true;
@@ -118,7 +214,7 @@ export function createCityZone(scene, cx, cz){
 
   const eastWestRoadLength = Math.abs(cx - beachPathX) + 10;
   const eastWestRoadCenterX = (cx + beachPathX) / 2 + 5;
-  addRoad(3.6, eastWestRoadLength - 9, eastWestRoadCenterX - 4, beachPathBranchZ - 2, true);
+  addRoad(3.6, eastWestRoadLength - 9.1, eastWestRoadCenterX - 3.5, beachPathBranchZ - 2, true);
 
   const northSouthRoadLength = Math.abs(beachPathBranchZ - cz) + 15;
   const northSouthRoadCenterZ = (beachPathBranchZ + cz) / 2;
@@ -478,8 +574,8 @@ export function createCityZone(scene, cx, cz){
 
   const beachLightSpots = [];
 
-  // Perpendicular connector lights
-  for (let m = -8; m <= 8; m += 16) {
+  // Perpendicular connector lights — use three positions (-8, 0, 8) instead of two
+  for (let m = -15; m <= 20; m += 12) {
     beachLightSpots.push({ x: eastWestRoadCenterX + m, z: beachPathBranchZ - 4.8, rot: 0, zOffset: 0.17 });
     beachLightSpots.push({ x: eastWestRoadCenterX + m, z: beachPathBranchZ + 0.8, rot: Math.PI, zOffset: -0.17 });
   }

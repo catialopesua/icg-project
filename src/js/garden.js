@@ -1,19 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-function makeCanvasTextTexture(text, opts = {}){
-  const w = opts.width || 512; const h = opts.height || 128;
-  const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = opts.bg || '#6b4a2c';
-  ctx.fillRect(0,0,w,h);
-  ctx.fillStyle = opts.color || '#fff';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `${opts.fontSize||98}px ${opts.font || 'sans-serif'}`;
-  ctx.fillText(text, w/2, h/2);
-  const tex = new THREE.CanvasTexture(canvas); tex.needsUpdate = true; return tex;
-}
-
 export function createGardenZone(scene, cx, cz){
   // Add a straight path and a circular plaza at the far end per user request.
   const pathLength = 30;
@@ -742,11 +729,88 @@ export function createGardenZone(scene, cx, cz){
     nuki.position.set(cx, archHeight - 0.65, cz + 1.0);
     archGroup.add(nuki);
 
-    // 'Park' text on the front face of the top beam
-    const textTex = makeCanvasTextTexture('Park', { width: 1024, height: 256, bg: '#8b5a2b', color: '#fff9e6', fontSize: 170, font: 'serif' });
-    const textPlane = new THREE.Mesh(new THREE.PlaneGeometry(archWidth * 0.6, 0.5), new THREE.MeshStandardMaterial({ map: textTex, transparent: true, roughness: 0.8, metalness: 0 }));
-    textPlane.position.set(cx, archHeight - 0.25, cz + 1.0 + beamDepth/2 + 0.01);
-    archGroup.add(textPlane);
+    // 3D block letters that form PARK on the front face of the top beam.
+    const letterMat = new THREE.MeshStandardMaterial({ color: 0xfff4dc, roughness: 0.64, metalness: 0.04 });
+
+    function makeStroke(w, h){
+      const stroke = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.1), letterMat);
+      stroke.castShadow = true;
+      stroke.receiveShadow = true;
+      return stroke;
+    }
+
+    function makeLetterP(){
+      const g = new THREE.Group();
+      const h = 0.42;
+      const t = 0.065;
+      const rightHeight = h * 0.5;
+
+      const stem = makeStroke(t, h); stem.position.set(-0.12, 0, 0);
+      const top = makeStroke(0.28, t); top.position.set(0.02, h/2 - t/2, 0);
+      const mid = makeStroke(0.28, t); mid.position.set(0.02, 0.02, 0);
+      const right = makeStroke(t, rightHeight); right.position.set(0.16, h/2 - rightHeight/2, 0);
+
+      g.add(stem, top, mid, right);
+      return g;
+    }
+
+    function makeLetterA(){
+      const g = new THREE.Group();
+      const h = 0.42;
+      const t = 0.065;
+
+      const left = makeStroke(t, h); left.position.set(-0.12, 0, 0);
+      const right = makeStroke(t, h); right.position.set(0.12, 0, 0);
+      const top = makeStroke(0.30, t); top.position.set(0, h/2 - t/2, 0);
+      const cross = makeStroke(0.22, t); cross.position.set(0, -0.01, 0);
+
+      g.add(left, right, top, cross);
+      return g;
+    }
+
+    function makeLetterR(){
+      const g = new THREE.Group();
+      const h = 0.42;
+      const t = 0.065;
+      const rightHeight = h * 0.5;
+
+      const stem = makeStroke(t, h); stem.position.set(-0.12, 0, 0);
+      const top = makeStroke(0.29, t); top.position.set(0.02, h/2 - t/2, 0);
+      const mid = makeStroke(0.29, t); mid.position.set(0.02, 0.02, 0);
+      const right = makeStroke(t, rightHeight); right.position.set(0.165, h/2 - rightHeight/2, 0);
+      const legJoint = makeStroke(0.08, t); legJoint.position.set(0.00, -0.015, 0);
+      const leg = makeStroke(t, 0.31); leg.position.set(0.06, -0.11, 0); leg.rotation.z = 0.71;
+
+      g.add(stem, top, mid, right, legJoint, leg);
+      return g;
+    }
+
+    function makeLetterK(){
+      const g = new THREE.Group();
+      const h = 0.42;
+      const t = 0.065;
+
+      const stem = makeStroke(t, h); stem.position.set(-0.12, 0, 0);
+      const joint = makeStroke(0.09, t); joint.position.set(-0.045, 0, 0);
+      const upper = makeStroke(t, 0.31); upper.position.set(0.03, 0.11, 0); upper.rotation.z = -0.73;
+      const lower = makeStroke(t, 0.31); lower.position.set(0.03, -0.11, 0); lower.rotation.z = 0.73;
+
+      g.add(stem, joint, upper, lower);
+      return g;
+    }
+
+    const wordGroup = new THREE.Group();
+    const letters = [makeLetterP(), makeLetterA(), makeLetterR(), makeLetterK()];
+    const spacing = 0.44;
+    const startX = -((letters.length - 1) * spacing) / 2;
+
+    letters.forEach((letter, idx) => {
+      letter.position.set(startX + idx * spacing, 0, 0);
+      wordGroup.add(letter);
+    });
+
+    wordGroup.position.set(cx, archHeight - 0.25, cz + 1.0 + beamDepth/2 + 0.08);
+    archGroup.add(wordGroup);
 
     scene.add(archGroup);
   })();
