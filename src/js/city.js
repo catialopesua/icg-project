@@ -14,7 +14,7 @@ export function createCityZone(scene, cx, cz){
   const CENTER_DASH_LENGTH = 2;
   const CENTER_DASH_GAP = 3.4;
   const CENTER_LINE_WIDTH = 0.18;
-  const CENTER_LINE_END_MARGIN = 0.9;
+  const CENTER_LINE_END_MARGIN = 1.9;
 
   function mergeIntervals(intervals, joinGap = 0.01) {
     if (!intervals.length) return [];
@@ -120,13 +120,12 @@ export function createCityZone(scene, cx, cz){
   const eastWestRoadCenterX = (cx + beachPathX) / 2 + 5;
   addRoad(3.6, eastWestRoadLength - 9, eastWestRoadCenterX - 4, beachPathBranchZ - 2, true);
 
-  const northSouthRoadLength = Math.abs(beachPathBranchZ - cz) + 12;
+  const northSouthRoadLength = Math.abs(beachPathBranchZ - cz) + 15;
   const northSouthRoadCenterZ = (beachPathBranchZ + cz) / 2;
-  addRoad(4.2, northSouthRoadLength, cx, northSouthRoadCenterZ, false);
 
   addRoad(4.2, 34, cx, cz, true);
-  addRoad(4.2, 28 + 15, cx, cz, false);
-  addRoad(3.2, 26 + 15, cx, cz + 13, true);
+  addRoad(4.2, 28 + 19.6, cx, cz, false); // este
+  addRoad(3.2, 26 + 10, cx, cz + 11.8, true); 
   addRoad(3.2, 22 + 15, cx, cz - 18, true);
   buildDashedCenterLines();
 
