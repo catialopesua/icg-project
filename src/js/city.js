@@ -425,7 +425,8 @@ export function createCityZone(scene, cx, cz){
           const halfWidth = r.width / 2;
           if (Math.abs(spot.z - r.z) < halfWidth + r.sideOffset + 0.8) {
             const dir = (spot.z >= r.z) ? 1 : -1;
-            spot.z = r.z + dir * (halfWidth + r.sideOffset - 0.08);
+            const sidewalkInset = Math.min(0.24, (r.sidewalkWidth || 1.1) * 0.45);
+            spot.z = r.z + dir * (halfWidth + sidewalkInset);
           }
         }
       } else {
@@ -434,7 +435,8 @@ export function createCityZone(scene, cx, cz){
           const halfWidth = r.width / 2;
           if (Math.abs(spot.x - r.x) < halfWidth + r.sideOffset + 0.8) {
             const dir = (spot.x >= r.x) ? 1 : -1;
-            spot.x = r.x + dir * (halfWidth + r.sideOffset - 0.08);
+            const sidewalkInset = Math.min(0.24, (r.sidewalkWidth || 1.1) * 0.45);
+            spot.x = r.x + dir * (halfWidth + sidewalkInset);
           }
         }
       }

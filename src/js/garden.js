@@ -40,6 +40,281 @@ export function createGardenZone(scene, cx, cz){
   ring.position.set(cx, 0.021, cz - pathLength + 1);
   scene.add(ring);
 
+  (function addBushes(){
+    const bushes = new THREE.Group();
+    bushes.name = 'garden-bushes';
+
+    const rectHalfW = Math.max(plazaRadius + 1.8, pathWidth/2 + 3.0);
+    const rectHalfD = pathLength/2 + 3;
+    const zCenter = cz - pathLength/2 -2;
+    const pathCenterZ = cz - pathLength/2 + 4;
+
+    const archWidth = pathWidth + 1.6;
+    const archZ = cz + 1.0;
+    const benchCountAlong = 3;
+    const benchOffset = pathWidth/2 + 0.7;
+    const lampOffset = 3;
+
+    const fenceInset = 1.1;
+    const maxBushes = 26;
+    const maxAttempts = maxBushes * 30;
+    const placed = [];
+    const flowerPalette = [0xff82b2, 0xfff2a6, 0xb7e7ff, 0xdfb8ff, 0xffb77f];
+
+    function makeBushTextureSet(size = 256){
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#2f5f31';
+      ctx.fillRect(0, 0, size, size);
+
+      // Broad leaf variation.
+      for (let i = 0; i < 2100; i++){
+        const x = Math.random() * size;
+        const y = Math.random() * size;
+        const r = 0.7 + Math.random() * 2.2;
+        const hue = 100 + Math.floor(Math.random() * 26);
+        const sat = 35 + Math.floor(Math.random() * 25);
+        const lit = 24 + Math.floor(Math.random() * 20);
+        ctx.fillStyle = `hsl(${hue}, ${sat}%, ${lit}%)`;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Dark clumps for depth.
+      for (let i = 0; i < 420; i++){
+        const x = Math.random() * size;
+        const y = Math.random() * size;
+        const r = 1.8 + Math.random() * 3.2;
+        ctx.fillStyle = 'rgba(20, 48, 21, 0.30)';
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Tiny bright highlights.
+      for (let i = 0; i < 260; i++){
+        const x = Math.random() * size;
+        const y = Math.random() * size;
+        const r = 0.55 + Math.random() * 1.2;
+        ctx.fillStyle = 'rgba(190, 255, 165, 0.20)';
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Subtle blossoms in the texture itself.
+      for (let i = 0; i < 90; i++){
+        const x = Math.random() * size;
+        const y = Math.random() * size;
+        const flowerColor = flowerPalette[Math.floor(Math.random() * flowerPalette.length)];
+        const flowerHex = `#${flowerColor.toString(16).padStart(6, '0')}`;
+        ctx.fillStyle = flowerHex;
+        ctx.beginPath();
+        ctx.arc(x, y, 0.9 + Math.random() * 1.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 250, 228, 0.95)';
+        ctx.beginPath();
+        ctx.arc(x, y, 0.35 + Math.random() * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const foliageMap = new THREE.CanvasTexture(canvas);
+      foliageMap.colorSpace = THREE.SRGBColorSpace;
+      foliageMap.wrapS = foliageMap.wrapT = THREE.RepeatWrapping;
+      foliageMap.repeat.set(2.2, 2.2);
+
+      const foliageBump = new THREE.CanvasTexture(canvas);
+      foliageBump.wrapS = foliageBump.wrapT = THREE.RepeatWrapping;
+      foliageBump.repeat.copy(foliageMap.repeat);
+
+      return { foliageMap, foliageBump };
+    }
+
+    const { foliageMap, foliageBump } = makeBushTextureSet(256);
+    const flowerPetalGeo = new THREE.SphereGeometry(0.028, 8, 7);
+    const flowerCenterGeo = new THREE.SphereGeometry(0.018, 8, 7);
+    const flowerCenterMat = new THREE.MeshStandardMaterial({ color: 0xfff6d6, roughness: 0.75, metalness: 0.01 });
+    const flowerPetalMats = flowerPalette.map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.82, metalness: 0.01 }));
+
+    function reserve(x, z, r){
+      placed.push({ x, z, r });
+    }
+
+    function overlapsReserved(x, z, r, pad = 0.16){
+      for (const p of placed){
+        const dx = x - p.x;
+        const dz = z - p.z;
+        const minDist = r + p.r + pad;
+        if ((dx*dx + dz*dz) < minDist * minDist) return true;
+      }
+      return false;
+    }
+
+    function intersectsPath(x, z, r){
+      const keepoutX = pathWidth/2 + 0.55 + r;
+      const keepoutZ = pathLength/2 + 0.45 + r;
+      return Math.abs(x - cx) <= keepoutX && Math.abs(z - pathCenterZ) <= keepoutZ;
+    }
+
+    function intersectsPlaza(x, z, r){
+      const dx = x - cx;
+      const dz = z - (cz - pathLength + 1);
+      const keepout = plazaRadius + 0.95 + r;
+      return (dx*dx + dz*dz) <= keepout * keepout;
+    }
+
+    function intersectsEntry(x, z, r){
+      const dx = x - cx;
+      const dz = z - archZ;
+      const keepout = archWidth * 0.55 + r;
+      return (dx*dx + dz*dz) <= keepout * keepout;
+    }
+
+    function addFlowerCluster(target, anchors, bushRadius){
+      const flowerCount = THREE.MathUtils.randInt(2, 6);
+      for (let i = 0; i < flowerCount; i++){
+        const anchor = anchors[Math.floor(Math.random() * anchors.length)];
+        const dir = new THREE.Vector3(
+          THREE.MathUtils.randFloatSpread(1),
+          THREE.MathUtils.randFloat(0.25, 1),
+          THREE.MathUtils.randFloatSpread(1)
+        ).normalize();
+
+        const base = new THREE.Vector3(anchor.x, anchor.y, anchor.z)
+          .addScaledVector(dir, anchor.r * THREE.MathUtils.randFloat(0.75, 0.92));
+
+        const up = dir.clone().normalize();
+        const ref = Math.abs(up.y) > 0.86 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+        const side = new THREE.Vector3().crossVectors(up, ref).normalize();
+        const fwd = new THREE.Vector3().crossVectors(side, up).normalize();
+
+        const petalMat = flowerPetalMats[Math.floor(Math.random() * flowerPetalMats.length)];
+        const petalScale = THREE.MathUtils.randFloat(0.75, 1.2) * (0.75 + bushRadius * 0.45);
+        const petalOffset = THREE.MathUtils.randFloat(0.025, 0.043) * (0.9 + bushRadius);
+
+        for (let p = 0; p < 5; p++){
+          const a = (p / 5) * Math.PI * 2;
+          const petalPos = base.clone()
+            .addScaledVector(side, Math.cos(a) * petalOffset)
+            .addScaledVector(fwd, Math.sin(a) * petalOffset);
+          const petal = new THREE.Mesh(flowerPetalGeo, petalMat);
+          petal.position.copy(petalPos);
+          petal.scale.setScalar(petalScale);
+          petal.castShadow = true;
+          petal.receiveShadow = true;
+          target.add(petal);
+        }
+
+        const center = new THREE.Mesh(flowerCenterGeo, flowerCenterMat);
+        center.position.copy(base).addScaledVector(up, 0.005 * petalScale);
+        center.scale.setScalar(Math.max(0.9, petalScale * 0.9));
+        center.castShadow = true;
+        center.receiveShadow = true;
+        target.add(center);
+      }
+    }
+
+    function makeBush(radius){
+      const hue = THREE.MathUtils.randFloat(0.28, 0.34);
+      const sat = THREE.MathUtils.randFloat(0.40, 0.55);
+      const lit = THREE.MathUtils.randFloat(0.22, 0.33);
+      const color = new THREE.Color().setHSL(hue, sat, lit);
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        map: foliageMap,
+        bumpMap: foliageBump,
+        bumpScale: 0.08,
+        roughness: 0.94,
+        metalness: 0.02
+      });
+
+      const g = new THREE.Group();
+      const r1 = radius;
+      const r2 = radius * THREE.MathUtils.randFloat(0.70, 0.88);
+      const r3 = radius * THREE.MathUtils.randFloat(0.62, 0.82);
+
+      const s1 = new THREE.Mesh(new THREE.SphereGeometry(r1, 12, 10), mat);
+      const s2 = new THREE.Mesh(new THREE.SphereGeometry(r2, 12, 10), mat);
+      const s3 = new THREE.Mesh(new THREE.SphereGeometry(r3, 12, 10), mat);
+
+      s1.position.set(0, r1 * 0.88, 0);
+      s2.position.set(r1 * 0.52, r2 * 0.88, r1 * 0.18);
+      s3.position.set(-r1 * 0.44, r3 * 0.84, -r1 * 0.24);
+
+      g.add(s1, s2, s3);
+
+      if (Math.random() < 0.92){
+        const anchors = [
+          { x: 0, y: r1 * 0.88, z: 0, r: r1 },
+          { x: r1 * 0.52, y: r2 * 0.88, z: r1 * 0.18, r: r2 },
+          { x: -r1 * 0.44, y: r3 * 0.84, z: -r1 * 0.24, r: r3 }
+        ];
+        addFlowerCluster(g, anchors, r1);
+      }
+
+      g.traverse((n) => {
+        if (!n.isMesh) return;
+        n.castShadow = true;
+        n.receiveShadow = true;
+      });
+      return g;
+    }
+
+    // Reserve benches (model and fallback locations) and lamp positions.
+    for (let i = 0; i < benchCountAlong; i++){
+      const t = (i + 0.5) / benchCountAlong;
+      const zModelBench = cz - t * pathLength + 2;
+      const zFallbackBench = cz - 1 - t * pathLength;
+      const zLamp = cz - 1 - t * pathLength;
+
+      reserve(cx - benchOffset, zModelBench, 0.82);
+      reserve(cx + benchOffset, zModelBench, 0.82);
+      reserve(cx - benchOffset, zFallbackBench, 0.82);
+      reserve(cx + benchOffset, zFallbackBench, 0.82);
+
+      reserve(cx - lampOffset, zLamp, 0.90);
+      reserve(cx + lampOffset, zLamp, 0.90);
+    }
+
+    // Reserve torii pillar vicinity.
+    const pillarOffsetX = archWidth/2 - 0.16;
+    reserve(cx - pillarOffsetX, archZ, 0.56);
+    reserve(cx + pillarOffsetX, archZ, 0.56);
+
+    let created = 0;
+    let attempts = 0;
+    while (created < maxBushes && attempts < maxAttempts){
+      attempts++;
+      const radius = THREE.MathUtils.randFloat(0.34, 0.56);
+      const minX = cx - rectHalfW + fenceInset + radius;
+      const maxX = cx + rectHalfW - fenceInset - radius;
+      const minZ = zCenter - rectHalfD + fenceInset + radius;
+      const maxZ = zCenter + rectHalfD - fenceInset - radius;
+      if (minX >= maxX || minZ >= maxZ) break;
+
+      const x = THREE.MathUtils.randFloat(minX, maxX);
+      const z = THREE.MathUtils.randFloat(minZ, maxZ);
+
+      if (intersectsPath(x, z, radius)) continue;
+      if (intersectsPlaza(x, z, radius)) continue;
+      if (intersectsEntry(x, z, radius)) continue;
+      if (overlapsReserved(x, z, radius, 0.20)) continue;
+
+      const bush = makeBush(radius);
+      bush.position.set(x, 0, z);
+      bush.rotation.y = THREE.MathUtils.randFloat(0, Math.PI * 2);
+
+      bushes.add(bush);
+      reserve(x, z, radius);
+      created++;
+    }
+
+    scene.add(bushes);
+  })();
+
   // Perimeter rectangular fence around the park, connected to the arch (gap at torii)
   (function addPerimeterFence(){
     const fenceGroup = new THREE.Group();
