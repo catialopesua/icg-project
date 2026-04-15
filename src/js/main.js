@@ -114,7 +114,7 @@ function savePercentage(storageKey, percentage) {
   }
 }
 
-const QUEST_FIND_BIRTHDAY_BOY = 'Find the Birthday Boy';
+const QUEST_FIND_BIRTHDAY_BOY = 'Find Tim';
 const QUEST_FIND_FRIENDS = "Find Tim's friends";
 
 const timDialogueLines = [
