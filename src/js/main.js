@@ -977,6 +977,75 @@ syncSceneMeshShadows(true);
 // GLTF/GLB model loader and placement
 const loader = new GLTFLoader();
 let actor = null;
+let actorMixer = null;
+let timWavingActions = [];
+let timWavingPendingFirstTalk = false;
+let timWavingPlayedOnFirstTalk = false;
+
+function getTrackProperty(trackName = '') {
+  const splitAt = trackName.lastIndexOf('.');
+  if (splitAt < 0) return '';
+  return trackName.slice(splitAt + 1);
+}
+
+function getTrackNode(trackName = '') {
+  const splitAt = trackName.lastIndexOf('.');
+  if (splitAt < 0) return trackName;
+  return trackName.slice(0, splitAt);
+}
+
+function buildTimWavingActions(mixer, clips = []) {
+  const bestClipPerNode = new Map();
+
+  for (const clip of clips) {
+    if (!clip || !Array.isArray(clip.tracks) || !clip.tracks.length) continue;
+
+    const transformTracks = clip.tracks.filter((track) => {
+      const prop = getTrackProperty(track.name);
+      return prop === 'quaternion' || prop === 'position';
+    });
+    const noScaleTracks = clip.tracks.filter((track) => getTrackProperty(track.name) !== 'scale');
+    const usableTracks = transformTracks.length ? transformTracks : noScaleTracks;
+    if (!usableTracks.length) continue;
+
+    const nodeName = getTrackNode(usableTracks[0].name || clip.name || 'node');
+    const cleanClip = new THREE.AnimationClip(`${clip.name || 'wave'}__clean`, clip.duration, usableTracks);
+
+    const score = usableTracks.length * 1000 + cleanClip.duration;
+    const existing = bestClipPerNode.get(nodeName);
+    if (!existing || score > existing.score) {
+      bestClipPerNode.set(nodeName, { clip: cleanClip, score });
+    }
+  }
+
+  const actions = [];
+  for (const entry of bestClipPerNode.values()) {
+    const action = mixer.clipAction(entry.clip);
+    action.enabled = true;
+    action.setEffectiveWeight(1);
+    actions.push(action);
+  }
+
+  return actions;
+}
+
+function playTimWavingOnFirstTalk() {
+  if (timWavingPlayedOnFirstTalk) return;
+  if (!timWavingActions.length) {
+    timWavingPendingFirstTalk = true;
+    return;
+  }
+
+  timWavingPendingFirstTalk = false;
+  timWavingPlayedOnFirstTalk = true;
+  for (const action of timWavingActions) {
+    action.reset();
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = false;
+    action.enabled = true;
+    action.play();
+  }
+}
 
 function enableShadows(model) {
   model.traverse((node) => {
@@ -1038,7 +1107,7 @@ function loadFriendModel(friendLoader, config) {
   });
 }
 
-loader.load('./models/boy1.glb', (gltf) => {
+loader.load('./models/Friends/birthday_boy.glb', (gltf) => {
   actor = gltf.scene;
   enableShadows(actor);
   const desiredHeight = 1.2;
@@ -1050,6 +1119,25 @@ loader.load('./models/boy1.glb', (gltf) => {
 
   // keep the NPC independent in the scene
   scene.add(actor);
+
+  actorMixer = new THREE.AnimationMixer(actor);
+  actorMixer.addEventListener('finished', (event) => {
+    if (timWavingActions.includes(event.action)) {
+      event.action.stop();
+    }
+  });
+
+  if (!Array.isArray(gltf.animations) || gltf.animations.length === 0) {
+    console.warn('Tim model has no animation clips in birthday_boy.glb.');
+  } else {
+    timWavingActions = buildTimWavingActions(actorMixer, gltf.animations);
+    if (!timWavingActions.length) {
+      timWavingActions = gltf.animations.map((clip) => actorMixer.clipAction(clip));
+    }
+    if (timWavingPendingFirstTalk && !timWavingPlayedOnFirstTalk) {
+      playTimWavingOnFirstTalk();
+    }
+  }
 
   const friendLoader = new GLTFLoader();
   [
@@ -1156,6 +1244,8 @@ document.addEventListener('keydown', (ev) => {
     if (dot >= FACING_DOT_THRESHOLD) {
       if (timDialogueCompleted) return;
 
+      playTimWavingOnFirstTalk();
+
       activeDialogue = 'tim-intro';
       activeDialogueIndex = 0;
 
@@ -1217,6 +1307,8 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
   const elapsed = clock.elapsedTime;
+
+  if (actorMixer) actorMixer.update(dt);
 
   if (introIsVisible()) {
     introOrbitState.angle += dt * 0.24;
