@@ -633,6 +633,13 @@ scene.add(dir.target);
 dir.target.position.copy(SHADOW_TARGET_POS);
 dir.target.updateMatrixWorld(true);
 
+const daySkyTexture = new THREE.TextureLoader().load(
+  './models/environment/DaySkyHDRI063B_2K/DaySkyHDRI063B_2K_TONEMAPPED.jpg'
+);
+daySkyTexture.mapping = THREE.EquirectangularReflectionMapping;
+daySkyTexture.colorSpace = THREE.SRGBColorSpace;
+daySkyTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
 function makeCelestialBody(coreColor, haloColor, radius, haloScale = 1.75, haloOpacity = 0.22) {
   const group = new THREE.Group();
   const coreMat = new THREE.MeshBasicMaterial({ color: coreColor, fog: false });
@@ -1227,6 +1234,14 @@ animate();
     
     // Adjust clear color for sky gradient
     renderer.setClearColor(day ? 0xa6d8ff : 0x02030a);
+
+    if (day) {
+      scene.background = daySkyTexture;
+      scene.environment = daySkyTexture;
+    } else {
+      scene.background = null;
+      scene.environment = null;
+    }
 
     // Directional light and shadows are intentionally different between day and night.
     if (day) {

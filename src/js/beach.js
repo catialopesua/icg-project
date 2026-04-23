@@ -24,64 +24,27 @@ function makeStripedTowelTexture(baseColor = '#ff8a80') {
   return tex;
 }
 
-function makeSandTexture(size = 1024) {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d');
+function makeSandTexture() {
+  const loader = new THREE.TextureLoader();
+  const textureBasePath = './models/textures/Ground093A_2K-JPG/Ground093A_2K-JPG';
+  const repeatX = 8;
+  const repeatY = 4;
 
-  // base sand color (richer for better visibility)
-  ctx.fillStyle = '#e6c27a';
-  ctx.fillRect(0, 0, size, size);
-
-  // add grain / speckle
-  for (let i = 0; i < 18000; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    const r = Math.random() * 1.2;
-    const rcol = 170 + Math.floor(Math.random() * 50);
-    const gcol = 120 + Math.floor(Math.random() * 45);
-    const bcol = 80 + Math.floor(Math.random() * 35);
-    const a = 0.04 + Math.random() * 0.16;
-    ctx.fillStyle = `rgba(${rcol},${gcol},${bcol},${a})`;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  function setup(tex, isColor = false) {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(repeatX, repeatY);
+    tex.anisotropy = 4;
+    if (isColor) tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
   }
 
-  // subtle larger variations / streaks
-  for (let i = 0; i < 260; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    const w = 6 + Math.random() * 28;
-    const h = 2 + Math.random() * 8;
-    ctx.fillStyle = `rgba(220,180,120,${0.03 + Math.random() * 0.10})`;
-    ctx.beginPath();
-    ctx.ellipse(x, y, w, h, Math.random() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  const map = setup(loader.load(`${textureBasePath}_Color.jpg`), true);
+  const normal = setup(loader.load(`${textureBasePath}_NormalGL.jpg`));
+  const roughness = setup(loader.load(`${textureBasePath}_Roughness.jpg`));
+  const bump = setup(loader.load(`${textureBasePath}_Displacement.jpg`));
+  const ao = setup(loader.load(`${textureBasePath}_AmbientOcclusion.jpg`));
 
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(6, 3);
-  tex.needsUpdate = true;
-
-  // bump map (simple grayscale highlights) to give slight relief
-  const bump = document.createElement('canvas');
-  bump.width = bump.height = Math.max(256, size / 2);
-  const bctx = bump.getContext('2d');
-  bctx.fillStyle = '#808080'; bctx.fillRect(0, 0, bump.width, bump.height);
-  for (let i = 0; i < 3800; i++) {
-    const x = Math.random() * bump.width;
-    const y = Math.random() * bump.height;
-    const r = 0.6 + Math.random() * 2.2;
-    const a = 0.03 + Math.random() * 0.18;
-    bctx.fillStyle = `rgba(255,255,255,${a})`;
-    bctx.beginPath(); bctx.arc(x, y, r, 0, Math.PI * 2); bctx.fill();
-  }
-  const bumpTex = new THREE.CanvasTexture(bump);
-  bumpTex.wrapS = bumpTex.wrapT = THREE.RepeatWrapping;
-  bumpTex.repeat.set(6, 3);
-  bumpTex.needsUpdate = true;
-
-  return { map: tex, bump: bumpTex };
+  return { map, normal, roughness, bump, ao };
 }
 
 function createSimpleUmbrella(x, z, y = 0.03, rot) {
@@ -181,11 +144,25 @@ export function createBeachZone(scene, parkCx, parkCz) {
   group.add(connector);
 
   // Rectangular beach (not circular)
-  const sandTex = makeSandTexture(2048);
-  const beach = new THREE.Mesh(
-    new THREE.PlaneGeometry(beachWidth, beachDepth),
-    new THREE.MeshStandardMaterial({ map: sandTex.map, bumpMap: sandTex.bump, bumpScale: 0.12, roughness: 0.86 })
-  );
+  const sandTex = makeSandTexture();
+  const beachGeometry = new THREE.PlaneGeometry(beachWidth, beachDepth);
+  if (beachGeometry.attributes.uv && !beachGeometry.attributes.uv2) {
+    beachGeometry.setAttribute('uv2', new THREE.BufferAttribute(new Float32Array(beachGeometry.attributes.uv.array), 2));
+  }
+  const beachMaterial = new THREE.MeshStandardMaterial({
+    map: sandTex.map,
+    normalMap: sandTex.normal,
+    roughnessMap: sandTex.roughness,
+    bumpMap: sandTex.bump,
+    aoMap: sandTex.ao,
+    roughness: 0.88,
+    metalness: 0.02
+  });
+  beachMaterial.bumpScale = 0.1;
+  beachMaterial.normalScale.set(0.85, 0.85);
+  beachMaterial.aoMapIntensity = 0.55;
+
+  const beach = new THREE.Mesh(beachGeometry, beachMaterial);
   beach.rotation.x = -Math.PI / 2;
   beach.position.set(beachCenterX, 0.025, beachCenterZ);
   beach.receiveShadow = true;
