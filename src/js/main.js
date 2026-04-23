@@ -114,7 +114,7 @@ function savePercentage(storageKey, percentage) {
   }
 }
 
-const QUEST_FIND_BIRTHDAY_BOY = 'Find Tim';
+const QUEST_FIND_BIRTHDAY_BOY = 'Find the Birthday Boy';
 const QUEST_FIND_FRIENDS = "Find Tim's friends";
 
 const timDialogueLines = [
@@ -658,7 +658,7 @@ function makeCelestialBody(coreColor, haloColor, radius, haloScale = 1.75, haloO
   return group;
 }
 
-const sun = makeCelestialBody(0xfffbf0, 0xfff2dc, 2.2, 3.8, 0.24);
+const sun = makeCelestialBody(0xfffbf0, 0xfff2dc, 2.2, 1.8, 0.24);
 sun.position.copy(DAY_LIGHT_POS);
 sun.visible = false;
 scene.add(sun);
@@ -675,116 +675,46 @@ scene.add(hemi);
 // Fog for night ambiance - enhanced for better atmosphere
 scene.fog = new THREE.FogExp2(0x02030a, 0.007);
 
-// Simple ground with procedurally generated grass-like texture
-function makeGrassTexture(size = 1024) {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d');
+// Grass texture set loaded from models/textures for the global terrain.
+function makeGrassTexture() {
+  const loader = new THREE.TextureLoader();
+  const textureBasePath = './models/textures/Grass002_2K-JPG/Grass002_2K-JPG';
+  const repeat = 30;
 
-  // Rich base green so grass stays visible under night lighting.
-  ctx.fillStyle = '#3f7a35';
-  ctx.fillRect(0, 0, size, size);
-
-  // Broad tonal patches to break repetition.
-  for (let i = 0; i < 650; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    const r = Math.random() * (size * 0.09);
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    const h = 90 + Math.floor(Math.random() * 32);
-    const s = 30 + Math.floor(Math.random() * 32);
-    const l = 26 + Math.floor(Math.random() * 20);
-    g.addColorStop(0, `hsla(${h}, ${s}%, ${l}%, ${0.08 + Math.random() * 0.09})`);
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  function setup(tex, isColor = false) {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(repeat, repeat);
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    if (isColor) tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
   }
 
-  // Dense micro-blades so the floor reads as grass, not leaves.
-  const bladeCount = Math.floor((size * size) / 62);
-  for (let i = 0; i < bladeCount; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    const len = 3 + Math.random() * 10;
-    const bend = (Math.random() - 0.5) * 1.0;
-    const hue = 94 + Math.floor(Math.random() * 26);
-    const sat = 38 + Math.floor(Math.random() * 34);
-    const light = 24 + Math.floor(Math.random() * 26);
-    const alpha = 0.24 + Math.random() * 0.30;
-    const width = 0.45 + Math.random() * 1.0;
+  const map = setup(loader.load(`${textureBasePath}_Color.jpg`), true);
+  const normal = setup(loader.load(`${textureBasePath}_NormalGL.jpg`));
+  const roughness = setup(loader.load(`${textureBasePath}_Roughness.jpg`));
+  const bump = setup(loader.load(`${textureBasePath}_Displacement.jpg`));
+  const ao = setup(loader.load(`${textureBasePath}_AmbientOcclusion.jpg`));
 
-    ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${light}%, ${alpha})`;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.quadraticCurveTo(x + bend * len * 0.45, y - len * 0.5, x + bend * len, y - len);
-    ctx.stroke();
-  }
-
-  // Small dry/bright speckles to keep the texture natural.
-  for (let i = 0; i < 3800; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    const r = 0.25 + Math.random() * 1.0;
-    const v = 130 + Math.floor(Math.random() * 70);
-    ctx.fillStyle = `rgba(${v},${Math.max(0, v + 8)},${Math.max(0, v - 60)},${0.025 + Math.random() * 0.055})`;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-  }
-
-  // Build a bump map with fine directional strokes to fake blade relief.
-  const bumpCanvas = document.createElement('canvas');
-  bumpCanvas.width = bumpCanvas.height = Math.max(256, size / 2);
-  const bctx = bumpCanvas.getContext('2d');
-  bctx.fillStyle = '#7f7f7f';
-  bctx.fillRect(0, 0, bumpCanvas.width, bumpCanvas.height);
-
-  const bumpBlades = Math.floor((bumpCanvas.width * bumpCanvas.height) / 120);
-  for (let i = 0; i < bumpBlades; i++) {
-    const x = Math.random() * bumpCanvas.width;
-    const y = Math.random() * bumpCanvas.height;
-    const len = 1.5 + Math.random() * 4.5;
-    const bend = (Math.random() - 0.5) * 0.8;
-    const v = 126 + Math.floor(Math.random() * 56);
-    bctx.strokeStyle = `rgba(${v},${v},${v},${0.10 + Math.random() * 0.22})`;
-    bctx.lineWidth = 0.5 + Math.random() * 0.9;
-    bctx.beginPath();
-    bctx.moveTo(x, y);
-    bctx.quadraticCurveTo(x + bend * len * 0.4, y - len * 0.5, x + bend * len, y - len);
-    bctx.stroke();
-  }
-
-  for (let i = 0; i < 1500; i++) {
-    const x = Math.random() * bumpCanvas.width;
-    const y = Math.random() * bumpCanvas.height;
-    const r = 0.3 + Math.random() * 1.2;
-    const v = 110 + Math.floor(Math.random() * 50);
-    bctx.fillStyle = `rgba(${v},${v},${v},${0.04 + Math.random() * 0.1})`;
-    bctx.beginPath(); bctx.arc(x, y, r, 0, Math.PI * 2); bctx.fill();
-  }
-
-  const map = new THREE.CanvasTexture(canvas);
-  map.wrapS = map.wrapT = THREE.RepeatWrapping;
-  map.repeat.set(9, 9);
-  map.colorSpace = THREE.SRGBColorSpace;
-  map.anisotropy = renderer.capabilities.getMaxAnisotropy();
-
-  const bump = new THREE.CanvasTexture(bumpCanvas);
-  bump.wrapS = bump.wrapT = THREE.RepeatWrapping;
-  bump.repeat.copy(map.repeat);
-
-  return { map, bump };
+  return { map, normal, roughness, bump, ao };
 }
 
 const groundGeo = new THREE.PlaneGeometry(80, 80);
+if (groundGeo.attributes.uv && !groundGeo.attributes.uv2) {
+  groundGeo.setAttribute('uv2', new THREE.BufferAttribute(new Float32Array(groundGeo.attributes.uv.array), 2));
+}
 const groundTex = makeGrassTexture();
 const groundMat = new THREE.MeshStandardMaterial({
-  color: 0x95c878,
   map: groundTex.map,
+  normalMap: groundTex.normal,
+  roughnessMap: groundTex.roughness,
   bumpMap: groundTex.bump,
-  roughness: 0.96,
-  metalness: 0
+  aoMap: groundTex.ao,
+  roughness: 0.95,
+  metalness: 0.01
 });
-groundMat.bumpScale = 0.05;
+groundMat.bumpScale = 0.02;
+groundMat.normalScale.set(0.8, 0.8);
+groundMat.aoMapIntensity = 0.65;
 const ground = new THREE.Mesh(groundGeo, groundMat);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
@@ -977,75 +907,6 @@ syncSceneMeshShadows(true);
 // GLTF/GLB model loader and placement
 const loader = new GLTFLoader();
 let actor = null;
-let actorMixer = null;
-let timWavingActions = [];
-let timWavingPendingFirstTalk = false;
-let timWavingPlayedOnFirstTalk = false;
-
-function getTrackProperty(trackName = '') {
-  const splitAt = trackName.lastIndexOf('.');
-  if (splitAt < 0) return '';
-  return trackName.slice(splitAt + 1);
-}
-
-function getTrackNode(trackName = '') {
-  const splitAt = trackName.lastIndexOf('.');
-  if (splitAt < 0) return trackName;
-  return trackName.slice(0, splitAt);
-}
-
-function buildTimWavingActions(mixer, clips = []) {
-  const bestClipPerNode = new Map();
-
-  for (const clip of clips) {
-    if (!clip || !Array.isArray(clip.tracks) || !clip.tracks.length) continue;
-
-    const transformTracks = clip.tracks.filter((track) => {
-      const prop = getTrackProperty(track.name);
-      return prop === 'quaternion' || prop === 'position';
-    });
-    const noScaleTracks = clip.tracks.filter((track) => getTrackProperty(track.name) !== 'scale');
-    const usableTracks = transformTracks.length ? transformTracks : noScaleTracks;
-    if (!usableTracks.length) continue;
-
-    const nodeName = getTrackNode(usableTracks[0].name || clip.name || 'node');
-    const cleanClip = new THREE.AnimationClip(`${clip.name || 'wave'}__clean`, clip.duration, usableTracks);
-
-    const score = usableTracks.length * 1000 + cleanClip.duration;
-    const existing = bestClipPerNode.get(nodeName);
-    if (!existing || score > existing.score) {
-      bestClipPerNode.set(nodeName, { clip: cleanClip, score });
-    }
-  }
-
-  const actions = [];
-  for (const entry of bestClipPerNode.values()) {
-    const action = mixer.clipAction(entry.clip);
-    action.enabled = true;
-    action.setEffectiveWeight(1);
-    actions.push(action);
-  }
-
-  return actions;
-}
-
-function playTimWavingOnFirstTalk() {
-  if (timWavingPlayedOnFirstTalk) return;
-  if (!timWavingActions.length) {
-    timWavingPendingFirstTalk = true;
-    return;
-  }
-
-  timWavingPendingFirstTalk = false;
-  timWavingPlayedOnFirstTalk = true;
-  for (const action of timWavingActions) {
-    action.reset();
-    action.setLoop(THREE.LoopOnce, 1);
-    action.clampWhenFinished = false;
-    action.enabled = true;
-    action.play();
-  }
-}
 
 function enableShadows(model) {
   model.traverse((node) => {
@@ -1119,25 +980,6 @@ loader.load('./models/Friends/birthday_boy.glb', (gltf) => {
 
   // keep the NPC independent in the scene
   scene.add(actor);
-
-  actorMixer = new THREE.AnimationMixer(actor);
-  actorMixer.addEventListener('finished', (event) => {
-    if (timWavingActions.includes(event.action)) {
-      event.action.stop();
-    }
-  });
-
-  if (!Array.isArray(gltf.animations) || gltf.animations.length === 0) {
-    console.warn('Tim model has no animation clips in birthday_boy.glb.');
-  } else {
-    timWavingActions = buildTimWavingActions(actorMixer, gltf.animations);
-    if (!timWavingActions.length) {
-      timWavingActions = gltf.animations.map((clip) => actorMixer.clipAction(clip));
-    }
-    if (timWavingPendingFirstTalk && !timWavingPlayedOnFirstTalk) {
-      playTimWavingOnFirstTalk();
-    }
-  }
 
   const friendLoader = new GLTFLoader();
   [
@@ -1244,8 +1086,6 @@ document.addEventListener('keydown', (ev) => {
     if (dot >= FACING_DOT_THRESHOLD) {
       if (timDialogueCompleted) return;
 
-      playTimWavingOnFirstTalk();
-
       activeDialogue = 'tim-intro';
       activeDialogueIndex = 0;
 
@@ -1307,8 +1147,6 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
   const elapsed = clock.elapsedTime;
-
-  if (actorMixer) actorMixer.update(dt);
 
   if (introIsVisible()) {
     introOrbitState.angle += dt * 0.24;
@@ -1401,7 +1239,7 @@ animate();
       dir.shadow.radius = 1.2;
       dir.shadow.blurSamples = 6;
       dir.shadow.camera.near = 0.5;
-      dir.shadow.camera.far = 170;
+      dir.shadow.camera.far = 110;
       dir.shadow.camera.left = -DAY_SHADOW_BOUNDS;
       dir.shadow.camera.right = DAY_SHADOW_BOUNDS;
       dir.shadow.camera.top = DAY_SHADOW_BOUNDS;
