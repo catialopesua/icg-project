@@ -635,11 +635,18 @@ dir.target.position.copy(SHADOW_TARGET_POS);
 dir.target.updateMatrixWorld(true);
 
 const daySkyTexture = new THREE.TextureLoader().load(
-  './models/environment/DaySkyHDRI063B_2K/DaySkyHDRI063B_2K_TONEMAPPED.jpg'
+  './models/environment/DaySkyHDRI001B_4K/DaySkyHDRI001B_4K_TONEMAPPED.jpg'
 );
 daySkyTexture.mapping = THREE.EquirectangularReflectionMapping;
 daySkyTexture.colorSpace = THREE.SRGBColorSpace;
 daySkyTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+const sunsetSkyTexture = new THREE.TextureLoader().load(
+  './models/environment/EveningSkyHDRI022B_4K/EveningSkyHDRI022B_4K_TONEMAPPED.jpg'
+);
+sunsetSkyTexture.mapping = THREE.EquirectangularReflectionMapping;
+sunsetSkyTexture.colorSpace = THREE.SRGBColorSpace;
+sunsetSkyTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
 const nightSkyTexture = new THREE.TextureLoader().load(
   './models/environment/NightSkyHDRI003_4K/NightSkyHDRI003_4K_TONEMAPPED.jpg'
@@ -1254,12 +1261,13 @@ animate();
   };
 
   let gradientSky = null;
+  let daySkyDome = null;
+  let sunsetSkyDome = null;
   let nightStars = null;
   let rainSystem = null;
   let snowSystem = null;
   let auroraGroup = null;
   let rainbowGroup = null;
-  let sunsetClouds = null;
   const rainDummy = new THREE.Object3D();
 
   function createGradientSky() {
@@ -1305,12 +1313,46 @@ animate();
     return mesh;
   }
 
+  function createTexturedSky(texture) {
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false
+    });
+
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(900, 48, 24), material);
+    mesh.userData.noAutoShadow = true;
+    mesh.userData.noCollision = true;
+    mesh.frustumCulled = false;
+    mesh.visible = false;
+    return mesh;
+  }
+
   function ensureGradientSky() {
     if (!gradientSky) {
       gradientSky = createGradientSky();
       weatherRoot.add(gradientSky);
     }
     return gradientSky;
+  }
+
+  function ensureDaySkyDome() {
+    if (!daySkyDome) {
+      daySkyDome = createTexturedSky(daySkyTexture);
+      daySkyDome.rotation.y = -Math.PI * 0.35;
+      weatherRoot.add(daySkyDome);
+    }
+    return daySkyDome;
+  }
+
+  function ensureSunsetSkyDome() {
+    if (!sunsetSkyDome) {
+      sunsetSkyDome = createTexturedSky(sunsetSkyTexture);
+      sunsetSkyDome.rotation.y = Math.PI * 0.92;
+      weatherRoot.add(sunsetSkyDome);
+    }
+    return sunsetSkyDome;
   }
 
   function setGradientSky(topColor, middleColor, bottomColor) {
@@ -1760,93 +1802,6 @@ animate();
     }
   }
 
-  function makeCloudPuff(x, y, z, {
-    color = 0xf8fbff,
-    opacity = 0.92,
-    roughness = 0.9,
-    metalness = 0.0,
-    scale = 1
-  } = {}) {
-    const group = new THREE.Group();
-    group.position.set(x, y, z);
-    const cloudMat = new THREE.MeshStandardMaterial({
-      color,
-      roughness,
-      metalness,
-      transparent: true,
-      opacity
-    });
-    for (let i = 0; i < 4; i++) {
-      const puff = new THREE.Mesh(
-        new THREE.SphereGeometry((4 + Math.random() * 2.4) * scale, 18, 14),
-        cloudMat
-      );
-      puff.position.set((i - 1.5) * 2.6 * scale, Math.random() * 1.5 * scale, (Math.random() - 0.5) * 2.2 * scale);
-      puff.userData.noAutoShadow = true;
-      puff.userData.noCollision = true;
-      group.add(puff);
-    }
-    return group;
-  }
-
-  function createSunsetClouds() {
-    const group = new THREE.Group();
-    group.name = 'sunset-cloud-layer';
-    group.visible = false;
-    group.userData.noAutoShadow = true;
-    group.userData.noCollision = true;
-    group.userData.clouds = [];
-
-    const palette = [0xffc08f, 0xff9f85, 0xd994cd, 0xffd6aa, 0xf38aa6];
-
-    for (let i = 0; i < 15; i++) {
-      const cloud = makeCloudPuff(
-        -240 + Math.random() * 480,
-        15 + Math.random() * 17,
-        -170 - Math.random() * 120,
-        {
-          color: palette[i % palette.length],
-          opacity: 0.34 + Math.random() * 0.18,
-          roughness: 0.72,
-          metalness: 0.0,
-          scale: 1.6 + Math.random() * 1.4
-        }
-      );
-      cloud.userData.baseX = cloud.position.x;
-      cloud.userData.baseY = cloud.position.y;
-      cloud.userData.baseZ = cloud.position.z;
-      cloud.userData.phase = Math.random() * Math.PI * 2;
-      cloud.userData.driftSpeed = 0.35 + Math.random() * 0.75;
-      cloud.userData.noAutoShadow = true;
-      cloud.userData.noCollision = true;
-      group.userData.clouds.push(cloud);
-      group.add(cloud);
-    }
-
-    return group;
-  }
-
-  function ensureSunsetClouds() {
-    if (!sunsetClouds) {
-      sunsetClouds = createSunsetClouds();
-      weatherRoot.add(sunsetClouds);
-    }
-    return sunsetClouds;
-  }
-
-  function updateSunsetClouds(elapsed, followPos) {
-    if (!sunsetClouds || !sunsetClouds.visible) return;
-    sunsetClouds.position.set(followPos.x, 0, followPos.z);
-
-    for (const cloud of sunsetClouds.userData.clouds) {
-      const phase = cloud.userData.phase;
-      const drift = cloud.userData.driftSpeed;
-      cloud.position.x = cloud.userData.baseX + Math.sin(elapsed * 0.045 * drift + phase) * (12 + drift * 7);
-      cloud.position.y = cloud.userData.baseY + Math.sin(elapsed * 0.2 + phase) * 0.75;
-      cloud.position.z = cloud.userData.baseZ + Math.cos(elapsed * 0.05 * drift + phase) * 3.5;
-    }
-  }
-
   function createRainbowBand(radius, tubeRadius, color) {
     const points = [];
     for (let i = 0; i <= 72; i++) {
@@ -1971,10 +1926,11 @@ animate();
 
   function hideSpecialEffects() {
     if (gradientSky) gradientSky.visible = false;
+    if (daySkyDome) daySkyDome.visible = false;
+    if (sunsetSkyDome) sunsetSkyDome.visible = false;
     if (nightStars) nightStars.visible = false;
     if (rainSystem) rainSystem.visible = false;
     if (snowSystem) snowSystem.visible = false;
-    if (sunsetClouds) sunsetClouds.visible = false;
     if (auroraGroup) auroraGroup.visible = false;
     if (rainbowGroup) rainbowGroup.visible = false;
   }
@@ -2143,29 +2099,37 @@ animate();
       case 'sunset': {
         applyDayNight(true);
         scene.background = null;
-        scene.environment = daySkyTexture;
-        renderer.setClearColor(0xf59b5e);
+        scene.environment = sunsetSkyTexture;
+        renderer.setClearColor(0xe78852);
         if (scene.fog) {
-          scene.fog.color.set(0xf2a577);
-          scene.fog.density = 0.00145;
+          scene.fog.color.set(0xdd8a62);
+          scene.fog.density = 0.0212;
         }
-        setGradientSky(0x3f5da8, 0xff8f4f, 0xffcd8f);
-        ensureGradientSky().visible = true;
-        dir.color.set(0xffb36a);
-        dir.intensity = 0.56;
-        dir.position.set(42, 14, -33);
+        dir.color.set(0xff9d5c);
+        dir.intensity = 0.7;
+        dir.position.set(-34, 24, 0);
+        dir.shadow.bias = -0.00028;
+        dir.shadow.normalBias = 0.02;
+        dir.shadow.radius = 1.8;
+        dir.shadow.blurSamples = 6;
+        dir.shadow.camera.near = 0.5;
+        dir.shadow.camera.far = 120;
+        dir.shadow.camera.left = -DAY_SHADOW_BOUNDS;
+        dir.shadow.camera.right = DAY_SHADOW_BOUNDS;
+        dir.shadow.camera.top = DAY_SHADOW_BOUNDS;
+        dir.shadow.camera.bottom = -DAY_SHADOW_BOUNDS;
         dir.target.position.copy(SHADOW_TARGET_POS);
         dir.target.updateMatrixWorld(true);
         dir.shadow.camera.updateProjectionMatrix();
         dir.shadow.needsUpdate = true;
-        sun.visible = true;
+        sun.visible = false;
         sun.position.copy(dir.position);
         moon.visible = false;
-        hemi.color.set(0xffcfaa);
-        hemi.groundColor.set(0x6f4f37);
-        hemi.intensity = 0.25;
-        setAmbientIntensity(0.21);
-        ensureSunsetClouds().visible = true;
+        hemi.color.set(0xffb98e);
+        hemi.groundColor.set(0x5a3728);
+        hemi.intensity = 0.7;
+        setAmbientIntensity(0.17);
+        ensureSunsetSkyDome().visible = true;
         break;
       }
       case 'rainy': {
@@ -2256,13 +2220,14 @@ animate();
       case 'sunny':
       default: {
         applyDayNight(true);
-        scene.background = daySkyTexture;
+        scene.background = null;
         scene.environment = daySkyTexture;
         renderer.setClearColor(0xa6d8ff);
         if (scene.fog) {
           scene.fog.color.set(0xcde6ff);
           scene.fog.density = 0.00075;
         }
+        ensureDaySkyDome().visible = true;
         applyGroundTextureSet(grassGroundTex, false);
         break;
       }
@@ -2306,6 +2271,14 @@ animate();
       gradientSky.position.copy(followPos);
     }
 
+    if (daySkyDome && daySkyDome.visible) {
+      daySkyDome.position.copy(followPos);
+    }
+
+    if (sunsetSkyDome && sunsetSkyDome.visible) {
+      sunsetSkyDome.position.copy(followPos);
+    }
+
     if (nightStars && nightStars.visible) {
       nightStars.position.set(followPos.x, 0, followPos.z);
       const layers = nightStars.userData.layers || [];
@@ -2316,7 +2289,6 @@ animate();
 
     if (rainSystem && rainSystem.visible && particlesEnabled) updateRainStreaks(rainSystem, elapsed, dt, followPos);
     if (snowSystem && snowSystem.visible && particlesEnabled) updateSnowParticles(snowSystem, elapsed, dt, followPos);
-    if (sunsetClouds && sunsetClouds.visible) updateSunsetClouds(elapsed, followPos);
     if (auroraGroup && auroraGroup.visible && particlesEnabled) updateAurora(elapsed, followPos);
     if (rainbowGroup && rainbowGroup.visible) updateRainbow(elapsed);
   };
