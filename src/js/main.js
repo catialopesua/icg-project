@@ -49,6 +49,7 @@ const friendsFoundCountElement = document.getElementById('friends-found-count');
 const closePanelButtons = Array.from(document.querySelectorAll('[data-close-panel]'));
 const saveSettingsButton = document.getElementById('save-settings');
 const settingShadows = document.getElementById('setting-shadows');
+const settingParticles = document.getElementById('setting-particles');
 const settingMusicVolume = document.getElementById('setting-music-volume');
 const musicVolumeValue = document.getElementById('music-volume-value');
 const settingSfxVolume = document.getElementById('setting-sfx-volume');
@@ -640,6 +641,20 @@ daySkyTexture.mapping = THREE.EquirectangularReflectionMapping;
 daySkyTexture.colorSpace = THREE.SRGBColorSpace;
 daySkyTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
+const nightSkyTexture = new THREE.TextureLoader().load(
+  './models/environment/NightSkyHDRI003_4K/NightSkyHDRI003_4K_TONEMAPPED.jpg'
+);
+nightSkyTexture.mapping = THREE.EquirectangularReflectionMapping;
+nightSkyTexture.colorSpace = THREE.SRGBColorSpace;
+nightSkyTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+const northernLightsSkyTexture = new THREE.TextureLoader().load(
+  './models/environment/NightSkyHDRI007_4K/NightSkyHDRI007_4K_TONEMAPPED.jpg'
+);
+northernLightsSkyTexture.mapping = THREE.EquirectangularReflectionMapping;
+northernLightsSkyTexture.colorSpace = THREE.SRGBColorSpace;
+northernLightsSkyTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
 function makeCelestialBody(coreColor, haloColor, radius, haloScale = 1.75, haloOpacity = 0.22) {
   const group = new THREE.Group();
   const coreMat = new THREE.MeshBasicMaterial({ color: coreColor, fog: false });
@@ -682,11 +697,9 @@ scene.add(hemi);
 // Fog for night ambiance - enhanced for better atmosphere
 scene.fog = new THREE.FogExp2(0x02030a, 0.007);
 
-// Grass texture set loaded from models/textures for the global terrain.
-function makeGrassTexture() {
+// Terrain texture sets loaded from models/textures for the global terrain.
+function makeTerrainTextureSet(textureBasePath, repeat = 30) {
   const loader = new THREE.TextureLoader();
-  const textureBasePath = './models/textures/Grass002_2K-JPG/Grass002_2K-JPG';
-  const repeat = 30;
 
   function setup(tex, isColor = false) {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -705,17 +718,19 @@ function makeGrassTexture() {
   return { map, normal, roughness, bump, ao };
 }
 
+const grassGroundTex = makeTerrainTextureSet('./models/textures/Grass002_2K-JPG/Grass002_2K-JPG', 30);
+const snowGroundTex = makeTerrainTextureSet('./models/textures/Snow015_2K-JPG/Snow015_2K-JPG', 12);
+
 const groundGeo = new THREE.PlaneGeometry(80, 80);
 if (groundGeo.attributes.uv && !groundGeo.attributes.uv2) {
   groundGeo.setAttribute('uv2', new THREE.BufferAttribute(new Float32Array(groundGeo.attributes.uv.array), 2));
 }
-const groundTex = makeGrassTexture();
 const groundMat = new THREE.MeshStandardMaterial({
-  map: groundTex.map,
-  normalMap: groundTex.normal,
-  roughnessMap: groundTex.roughness,
-  bumpMap: groundTex.bump,
-  aoMap: groundTex.ao,
+  map: grassGroundTex.map,
+  normalMap: grassGroundTex.normal,
+  roughnessMap: grassGroundTex.roughness,
+  bumpMap: grassGroundTex.bump,
+  aoMap: grassGroundTex.ao,
   roughness: 0.95,
   metalness: 0.01
 });
@@ -1191,6 +1206,10 @@ function animate() {
     updateNightStreetlightShadowCasters(false);
   }
 
+  if (typeof scene.userData.updateWeatherEffects === 'function') {
+    scene.userData.updateWeatherEffects(elapsed, dt);
+  }
+
   // proximity check for interact hint
   try {
     if (actor && controls && controls.getObject) {
@@ -1212,38 +1231,777 @@ function animate() {
 }
 animate();
 
-// Weather UI (Sunny/Night unlocked, others locked in UI)
+// Weather UI and weather simulation (all weathers unlocked for testing).
 (() => {
   let currentWeather = 'sunny';
+  let particlesEnabled = !settingParticles || settingParticles.checked;
+
+  const weatherRoot = new THREE.Group();
+  weatherRoot.name = 'weather-effects-root';
+  weatherRoot.userData.noCollision = true;
+  weatherRoot.userData.noAutoShadow = true;
+  scene.add(weatherRoot);
+
+  const ambientLights = [];
+  scene.traverse((o) => { if (o.isAmbientLight) ambientLights.push(o); });
+
+  const groundDefaults = {
+    bumpScale: groundMat.bumpScale,
+    normalScale: groundMat.normalScale.clone(),
+    aoMapIntensity: groundMat.aoMapIntensity,
+    roughness: groundMat.roughness,
+    metalness: groundMat.metalness
+  };
+
+  let gradientSky = null;
+  let nightStars = null;
+  let rainSystem = null;
+  let snowSystem = null;
+  let auroraGroup = null;
+  let rainbowGroup = null;
+  let sunsetClouds = null;
+  const rainDummy = new THREE.Object3D();
+
+  function createGradientSky() {
+    const uniforms = {
+      topColor: { value: new THREE.Color(0x7ec8ff) },
+      middleColor: { value: new THREE.Color(0x9fdaff) },
+      bottomColor: { value: new THREE.Color(0xe5f6ff) }
+    };
+
+    const material = new THREE.ShaderMaterial({
+      uniforms,
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPos.xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 topColor;
+        uniform vec3 middleColor;
+        uniform vec3 bottomColor;
+        varying vec3 vWorldPosition;
+        void main() {
+          float h = clamp(normalize(vWorldPosition).y * 0.5 + 0.5, 0.0, 1.0);
+          vec3 lower = mix(bottomColor, middleColor, smoothstep(0.0, 0.55, h));
+          vec3 upper = mix(middleColor, topColor, smoothstep(0.42, 1.0, h));
+          vec3 skyColor = mix(lower, upper, smoothstep(0.28, 0.78, h));
+          gl_FragColor = vec4(skyColor, 1.0);
+        }
+      `,
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false
+    });
+
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(900, 48, 24), material);
+    mesh.userData.noAutoShadow = true;
+    mesh.userData.noCollision = true;
+    mesh.frustumCulled = false;
+    mesh.visible = false;
+    return mesh;
+  }
+
+  function ensureGradientSky() {
+    if (!gradientSky) {
+      gradientSky = createGradientSky();
+      weatherRoot.add(gradientSky);
+    }
+    return gradientSky;
+  }
+
+  function setGradientSky(topColor, middleColor, bottomColor) {
+    const sky = ensureGradientSky();
+    sky.material.uniforms.topColor.value.set(topColor);
+    sky.material.uniforms.middleColor.value.set(middleColor);
+    sky.material.uniforms.bottomColor.value.set(bottomColor);
+  }
+
+  function setAmbientIntensity(intensity) {
+    for (const ambient of ambientLights) ambient.intensity = intensity;
+  }
+
+  function applyGroundTextureSet(textureSet, useSnowProfile = false) {
+    groundMat.map = textureSet.map;
+    groundMat.normalMap = textureSet.normal;
+    groundMat.roughnessMap = textureSet.roughness;
+    groundMat.bumpMap = textureSet.bump;
+    groundMat.aoMap = textureSet.ao;
+    if (useSnowProfile) {
+      groundMat.bumpScale = 0.01;
+      groundMat.normalScale.set(0.55, 0.55);
+      groundMat.aoMapIntensity = 0.5;
+      groundMat.roughness = 0.92;
+      groundMat.metalness = 0.0;
+    } else {
+      groundMat.bumpScale = groundDefaults.bumpScale;
+      groundMat.normalScale.copy(groundDefaults.normalScale);
+      groundMat.aoMapIntensity = groundDefaults.aoMapIntensity;
+      groundMat.roughness = groundDefaults.roughness;
+      groundMat.metalness = groundDefaults.metalness;
+    }
+    groundMat.needsUpdate = true;
+  }
+
+  function makeStarLayer(count, size, opacity) {
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const idx = i * 3;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI * 0.52;
+      const radius = 260 + Math.random() * 380;
+      positions[idx] = Math.sin(phi) * Math.cos(theta) * radius;
+      positions[idx + 1] = 70 + Math.cos(phi) * radius * 0.7;
+      positions[idx + 2] = Math.sin(phi) * Math.sin(theta) * radius;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const material = new THREE.PointsMaterial({
+      color: 0xf5f7ff,
+      size,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      fog: false
+    });
+
+    const points = new THREE.Points(geometry, material);
+    points.userData.noAutoShadow = true;
+    points.userData.noCollision = true;
+    points.frustumCulled = false;
+    return { points, material, baseOpacity: opacity, pulseOffset: Math.random() * Math.PI * 2, pulseSpeed: 0.35 + Math.random() * 0.6 };
+  }
+
+  function createNightStars() {
+    const group = new THREE.Group();
+    group.name = 'night-star-field';
+    group.visible = false;
+    group.userData.noAutoShadow = true;
+    group.userData.noCollision = true;
+
+    const layerA = makeStarLayer(1300, 1.25, 0.72);
+    const layerB = makeStarLayer(700, 1.8, 0.45);
+    group.add(layerA.points);
+    group.add(layerB.points);
+    group.userData.layers = [layerA, layerB];
+    return group;
+  }
+
+  function ensureNightStars() {
+    if (!nightStars) {
+      nightStars = createNightStars();
+      weatherRoot.add(nightStars);
+    }
+    return nightStars;
+  }
+
+  function createSnowParticleSystem({
+    count,
+    width,
+    depth,
+    height,
+    color,
+    size,
+    baseSpeed,
+    speedVariance,
+    windX,
+    windZ
+  }) {
+    const positions = new Float32Array(count * 3);
+    const speeds = new Float32Array(count);
+    const sway = new Float32Array(count);
+    const phase = new Float32Array(count);
+
+    for (let i = 0; i < count; i++) {
+      const idx = i * 3;
+      positions[idx] = (Math.random() - 0.5) * width;
+      positions[idx + 1] = Math.random() * height;
+      positions[idx + 2] = (Math.random() - 0.5) * depth;
+      speeds[i] = baseSpeed + Math.random() * speedVariance;
+      sway[i] = 0.25 + Math.random() * 0.85;
+      phase[i] = Math.random() * Math.PI * 2;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    const positionAttr = new THREE.BufferAttribute(positions, 3);
+    positionAttr.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('position', positionAttr);
+
+    const material = new THREE.PointsMaterial({
+      color,
+      size,
+      transparent: true,
+      opacity: 0.82,
+      depthWrite: false,
+      fog: true,
+      sizeAttenuation: true
+    });
+
+    const points = new THREE.Points(geometry, material);
+    points.visible = false;
+    points.userData = {
+      kind: 'snow',
+      width,
+      depth,
+      height,
+      speeds,
+      sway,
+      phase,
+      windX,
+      windZ
+    };
+    points.userData.noAutoShadow = true;
+    points.userData.noCollision = true;
+    points.frustumCulled = false;
+    weatherRoot.add(points);
+    return points;
+  }
+
+  function createRainStreakSystem({
+    count,
+    width,
+    depth,
+    height,
+    baseSpeed,
+    speedVariance,
+    windX,
+    windZ
+  }) {
+    const dropGeometry = new THREE.BoxGeometry(0.03, 1.42, 0.03);
+    const dropMaterial = new THREE.MeshBasicMaterial({
+      color: 0xbfd8f5,
+      transparent: true,
+      opacity: 0.52,
+      depthWrite: false,
+      fog: true
+    });
+
+    const mesh = new THREE.InstancedMesh(dropGeometry, dropMaterial, count);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false;
+    mesh.visible = false;
+
+    const offsets = new Float32Array(count * 3);
+    const speeds = new Float32Array(count);
+    const phase = new Float32Array(count);
+    const tilts = new Float32Array(count * 2);
+    const scales = new Float32Array(count);
+
+    for (let i = 0; i < count; i++) {
+      const idx = i * 3;
+      offsets[idx] = (Math.random() - 0.5) * width;
+      offsets[idx + 1] = Math.random() * height;
+      offsets[idx + 2] = (Math.random() - 0.5) * depth;
+      speeds[i] = baseSpeed + Math.random() * speedVariance;
+      phase[i] = Math.random() * Math.PI * 2;
+      tilts[i * 2] = THREE.MathUtils.degToRad(8 + Math.random() * 9);
+      tilts[i * 2 + 1] = THREE.MathUtils.degToRad(-7 + Math.random() * 14);
+      scales[i] = 0.85 + Math.random() * 0.75;
+
+      rainDummy.position.set(offsets[idx], offsets[idx + 1], offsets[idx + 2]);
+      rainDummy.rotation.set(tilts[i * 2], 0, tilts[i * 2 + 1]);
+      rainDummy.scale.set(1, scales[i], 1);
+      rainDummy.updateMatrix();
+      mesh.setMatrixAt(i, rainDummy.matrix);
+    }
+
+    mesh.userData = {
+      kind: 'rain-streaks',
+      width,
+      depth,
+      height,
+      windX,
+      windZ,
+      offsets,
+      speeds,
+      phase,
+      tilts,
+      scales
+    };
+    mesh.userData.noAutoShadow = true;
+    mesh.userData.noCollision = true;
+    weatherRoot.add(mesh);
+    return mesh;
+  }
+
+  function ensureRainSystem() {
+    if (!rainSystem) {
+      rainSystem = createRainStreakSystem({
+        count: 1750,
+        width: 135,
+        depth: 135,
+        height: 44,
+        baseSpeed: 30,
+        speedVariance: 20,
+        windX: 2.6,
+        windZ: 0.95
+      });
+    }
+    return rainSystem;
+  }
+
+  function ensureSnowSystem() {
+    if (!snowSystem) {
+      snowSystem = createSnowParticleSystem({
+        count: 2600,
+        width: 135,
+        depth: 135,
+        height: 34,
+        color: 0xf6fbff,
+        size: 0.19,
+        baseSpeed: 1.4,
+        speedVariance: 2.4,
+        windX: 0.4,
+        windZ: 0.18
+      });
+    }
+    return snowSystem;
+  }
+
+  function updateRainStreaks(system, elapsed, dt, followPos) {
+    if (!system || !system.visible) return;
+
+    system.position.set(followPos.x, Math.max(0, followPos.y - 1.25), followPos.z);
+
+    const data = system.userData;
+    const halfW = data.width * 0.5;
+    const halfD = data.depth * 0.5;
+    const count = data.speeds.length;
+
+    for (let i = 0; i < count; i++) {
+      const idx = i * 3;
+      const drift = Math.sin(elapsed * 3.1 + data.phase[i]) * 0.28;
+
+      data.offsets[idx] += (data.windX + drift) * dt;
+      data.offsets[idx + 2] += data.windZ * dt;
+      data.offsets[idx + 1] -= data.speeds[i] * dt;
+
+      if (data.offsets[idx] > halfW) data.offsets[idx] -= data.width;
+      if (data.offsets[idx] < -halfW) data.offsets[idx] += data.width;
+      if (data.offsets[idx + 2] > halfD) data.offsets[idx + 2] -= data.depth;
+      if (data.offsets[idx + 2] < -halfD) data.offsets[idx + 2] += data.depth;
+
+      if (data.offsets[idx + 1] < 0) {
+        data.offsets[idx + 1] = data.height;
+        data.offsets[idx] = (Math.random() - 0.5) * data.width;
+        data.offsets[idx + 2] = (Math.random() - 0.5) * data.depth;
+        data.phase[i] = Math.random() * Math.PI * 2;
+      }
+
+      rainDummy.position.set(data.offsets[idx], data.offsets[idx + 1], data.offsets[idx + 2]);
+      rainDummy.rotation.set(
+        data.tilts[i * 2],
+        0,
+        data.tilts[i * 2 + 1] + Math.sin(elapsed * 2.1 + data.phase[i]) * 0.045
+      );
+      rainDummy.scale.set(1, data.scales[i], 1);
+      rainDummy.updateMatrix();
+      system.setMatrixAt(i, rainDummy.matrix);
+    }
+
+    system.instanceMatrix.needsUpdate = true;
+  }
+
+  function updateSnowParticles(system, elapsed, dt, followPos) {
+    if (!system || !system.visible) return;
+
+    system.position.set(followPos.x, Math.max(0, followPos.y - 1.2), followPos.z);
+    const data = system.userData;
+    const positions = system.geometry.attributes.position.array;
+    const halfW = data.width * 0.5;
+    const halfD = data.depth * 0.5;
+    const count = data.speeds.length;
+
+    for (let i = 0; i < count; i++) {
+      const idx = i * 3;
+      const drift = Math.sin(elapsed * 0.9 + data.phase[i]) * data.sway[i];
+      const driftZ = Math.cos(elapsed * 0.65 + data.phase[i]) * data.sway[i] * 0.4;
+
+      positions[idx] += (data.windX + drift) * dt;
+      positions[idx + 2] += (data.windZ + driftZ) * dt;
+      positions[idx + 1] -= data.speeds[i] * dt;
+
+      if (positions[idx] > halfW) positions[idx] -= data.width;
+      if (positions[idx] < -halfW) positions[idx] += data.width;
+      if (positions[idx + 2] > halfD) positions[idx + 2] -= data.depth;
+      if (positions[idx + 2] < -halfD) positions[idx + 2] += data.depth;
+
+      if (positions[idx + 1] < 0) {
+        positions[idx + 1] = data.height;
+        positions[idx] = (Math.random() - 0.5) * data.width;
+        positions[idx + 2] = (Math.random() - 0.5) * data.depth;
+        data.phase[i] = Math.random() * Math.PI * 2;
+      }
+    }
+
+    system.geometry.attributes.position.needsUpdate = true;
+  }
+
+  function createAuroraRibbonMaterial(phase, opacityBase) {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        time: { value: 0 },
+        phase: { value: phase },
+        opacity: { value: opacityBase },
+        colorA: { value: new THREE.Color(0x8ef8db) },
+        colorB: { value: new THREE.Color(0x83dfff) },
+        colorC: { value: new THREE.Color(0xaa9cff) }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying float vWave;
+        uniform float time;
+        uniform float phase;
+
+        void main() {
+          vUv = uv;
+          vec3 pos = position;
+          float waveA = sin((position.x * 0.045) + time * 0.85 + phase) * 1.6;
+          float waveB = sin((position.x * 0.09) - time * 0.50 + phase * 1.8) * 0.9;
+          float wave = waveA + waveB;
+          pos.z += wave;
+          pos.y += sin((position.x * 0.03) + time * 0.32 + phase) * 0.55;
+          vWave = wave;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        varying float vWave;
+        uniform float opacity;
+        uniform vec3 colorA;
+        uniform vec3 colorB;
+        uniform vec3 colorC;
+
+        float softEdge(float v) {
+          return smoothstep(0.04, 0.2, v) * smoothstep(0.04, 0.2, 1.0 - v);
+        }
+
+        void main() {
+          float edgeX = softEdge(vUv.x);
+          float edgeY = smoothstep(0.0, 0.12, vUv.y) * smoothstep(0.0, 0.92, 1.0 - vUv.y);
+          float band = 0.58 + 0.42 * sin(vUv.x * 18.0 + vUv.y * 7.0 + vWave * 0.55);
+          float veil = 0.5 + 0.5 * sin(vUv.x * 5.0 + vWave * 0.35);
+          float alpha = edgeX * edgeY * band * veil * opacity;
+          if (alpha < 0.01) discard;
+
+          vec3 col = mix(colorA, colorB, clamp(vUv.y + vWave * 0.035, 0.0, 1.0));
+          col = mix(col, colorC, smoothstep(0.45, 1.0, vUv.y));
+          gl_FragColor = vec4(col, alpha);
+        }
+      `,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false
+    });
+  }
+
+  function createAuroraGroup() {
+    const group = new THREE.Group();
+    group.name = 'northern-lights-ribbons';
+    group.visible = false;
+    group.userData.noAutoShadow = true;
+    group.userData.noCollision = true;
+    group.userData.ribbons = [];
+
+    for (let i = 0; i < 6; i++) {
+      const geometry = new THREE.PlaneGeometry(220, 38, 120, 1);
+      const phase = Math.random() * Math.PI * 2;
+      const opacityBase = 0.16 + i * 0.025;
+      const material = createAuroraRibbonMaterial(phase, opacityBase);
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set((i - 2.5) * 34, 57 + i * 2.0, -182 + i * 18);
+      mesh.rotation.x = -0.18;
+      mesh.rotation.y = (i - 2.5) * 0.08;
+      mesh.userData.phase = phase;
+      mesh.userData.opacityBase = opacityBase;
+      mesh.userData.baseX = mesh.position.x;
+      mesh.userData.baseY = mesh.position.y;
+      mesh.userData.baseZ = mesh.position.z;
+      mesh.userData.noAutoShadow = true;
+      mesh.userData.noCollision = true;
+      group.userData.ribbons.push(mesh);
+      group.add(mesh);
+    }
+
+    return group;
+  }
+
+  function ensureAuroraGroup() {
+    if (!auroraGroup) {
+      auroraGroup = createAuroraGroup();
+      weatherRoot.add(auroraGroup);
+    }
+    return auroraGroup;
+  }
+
+  function updateAurora(elapsed, followPos) {
+    if (!auroraGroup || !auroraGroup.visible) return;
+    auroraGroup.position.set(followPos.x, 0, followPos.z + 16);
+
+    for (let i = 0; i < auroraGroup.userData.ribbons.length; i++) {
+      const ribbon = auroraGroup.userData.ribbons[i];
+      const phase = ribbon.userData.phase;
+
+      ribbon.position.x = ribbon.userData.baseX + Math.sin(elapsed * 0.16 + phase) * 3.6;
+      ribbon.position.y = ribbon.userData.baseY + Math.sin(elapsed * 0.22 + phase) * 0.68;
+      ribbon.rotation.z = Math.sin(elapsed * 0.12 + phase) * 0.04;
+
+      ribbon.material.uniforms.time.value = elapsed * (0.92 + i * 0.03);
+      ribbon.material.uniforms.opacity.value = ribbon.userData.opacityBase + Math.sin(elapsed * 0.45 + phase) * 0.05;
+    }
+  }
+
+  function makeCloudPuff(x, y, z, {
+    color = 0xf8fbff,
+    opacity = 0.92,
+    roughness = 0.9,
+    metalness = 0.0,
+    scale = 1
+  } = {}) {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    const cloudMat = new THREE.MeshStandardMaterial({
+      color,
+      roughness,
+      metalness,
+      transparent: true,
+      opacity
+    });
+    for (let i = 0; i < 4; i++) {
+      const puff = new THREE.Mesh(
+        new THREE.SphereGeometry((4 + Math.random() * 2.4) * scale, 18, 14),
+        cloudMat
+      );
+      puff.position.set((i - 1.5) * 2.6 * scale, Math.random() * 1.5 * scale, (Math.random() - 0.5) * 2.2 * scale);
+      puff.userData.noAutoShadow = true;
+      puff.userData.noCollision = true;
+      group.add(puff);
+    }
+    return group;
+  }
+
+  function createSunsetClouds() {
+    const group = new THREE.Group();
+    group.name = 'sunset-cloud-layer';
+    group.visible = false;
+    group.userData.noAutoShadow = true;
+    group.userData.noCollision = true;
+    group.userData.clouds = [];
+
+    const palette = [0xffc08f, 0xff9f85, 0xd994cd, 0xffd6aa, 0xf38aa6];
+
+    for (let i = 0; i < 15; i++) {
+      const cloud = makeCloudPuff(
+        -240 + Math.random() * 480,
+        15 + Math.random() * 17,
+        -170 - Math.random() * 120,
+        {
+          color: palette[i % palette.length],
+          opacity: 0.34 + Math.random() * 0.18,
+          roughness: 0.72,
+          metalness: 0.0,
+          scale: 1.6 + Math.random() * 1.4
+        }
+      );
+      cloud.userData.baseX = cloud.position.x;
+      cloud.userData.baseY = cloud.position.y;
+      cloud.userData.baseZ = cloud.position.z;
+      cloud.userData.phase = Math.random() * Math.PI * 2;
+      cloud.userData.driftSpeed = 0.35 + Math.random() * 0.75;
+      cloud.userData.noAutoShadow = true;
+      cloud.userData.noCollision = true;
+      group.userData.clouds.push(cloud);
+      group.add(cloud);
+    }
+
+    return group;
+  }
+
+  function ensureSunsetClouds() {
+    if (!sunsetClouds) {
+      sunsetClouds = createSunsetClouds();
+      weatherRoot.add(sunsetClouds);
+    }
+    return sunsetClouds;
+  }
+
+  function updateSunsetClouds(elapsed, followPos) {
+    if (!sunsetClouds || !sunsetClouds.visible) return;
+    sunsetClouds.position.set(followPos.x, 0, followPos.z);
+
+    for (const cloud of sunsetClouds.userData.clouds) {
+      const phase = cloud.userData.phase;
+      const drift = cloud.userData.driftSpeed;
+      cloud.position.x = cloud.userData.baseX + Math.sin(elapsed * 0.045 * drift + phase) * (12 + drift * 7);
+      cloud.position.y = cloud.userData.baseY + Math.sin(elapsed * 0.2 + phase) * 0.75;
+      cloud.position.z = cloud.userData.baseZ + Math.cos(elapsed * 0.05 * drift + phase) * 3.5;
+    }
+  }
+
+  function createRainbowBand(radius, tubeRadius, color) {
+    const points = [];
+    for (let i = 0; i <= 72; i++) {
+      const t = i / 72;
+      const angle = Math.PI - t * Math.PI;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius * 0.66;
+      points.push(new THREE.Vector3(x, y, 0));
+    }
+    const curve = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.2);
+    const geometry = new THREE.TubeGeometry(curve, 120, tubeRadius, 12, false);
+    const material = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.16,
+      roughness: 0.28,
+      metalness: 0.0,
+      transparent: true,
+      opacity: 0.95
+    });
+    const band = new THREE.Mesh(geometry, material);
+    band.userData.noAutoShadow = true;
+    band.userData.noCollision = true;
+    return band;
+  }
+
+  function createRainbowGlow(radius, tubeRadius, color) {
+    const points = [];
+    for (let i = 0; i <= 72; i++) {
+      const t = i / 72;
+      const angle = Math.PI - t * Math.PI;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius * 0.66;
+      points.push(new THREE.Vector3(x, y, 0));
+    }
+    const curve = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.2);
+    const geometry = new THREE.TubeGeometry(curve, 90, tubeRadius * 1.9, 10, false);
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.2,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false
+    });
+    const glow = new THREE.Mesh(geometry, material);
+    glow.userData.noAutoShadow = true;
+    glow.userData.noCollision = true;
+    return glow;
+  }
+
+  function createRainbowGroup() {
+    const group = new THREE.Group();
+    group.name = 'rainbow-arc';
+    group.visible = false;
+    group.position.set(0, 0, 0);
+    group.userData.noAutoShadow = true;
+    group.userData.noCollision = true;
+    group.userData.bands = [];
+    group.userData.glows = [];
+
+    const colors = [
+      0xff3a2f,
+      0xff8c2f,
+      0xffd440,
+      0x59d85f,
+      0x4fc8ff,
+      0x3c6dff,
+      0x8a56ff
+    ];
+
+    for (let i = 0; i < colors.length; i++) {
+      const band = createRainbowBand(62 - i * 1.55, 0.74, colors[i]);
+      const glow = createRainbowGlow(62 - i * 1.55, 0.7, colors[i]);
+
+      band.position.set(0, 14.5, -150);
+      band.rotation.y = -0.03;
+      glow.position.copy(band.position);
+      glow.rotation.copy(band.rotation);
+
+      band.userData.baseY = band.position.y;
+      band.userData.phase = Math.random() * Math.PI * 2;
+      band.userData.noAutoShadow = true;
+      band.userData.noCollision = true;
+      glow.userData.baseY = glow.position.y;
+      glow.userData.phase = band.userData.phase;
+      glow.userData.baseOpacity = glow.material.opacity;
+      group.add(band);
+      group.add(glow);
+      group.userData.bands.push(band);
+      group.userData.glows.push(glow);
+    }
+
+    group.add(makeCloudPuff(-63, 9, -150, { scale: 1.35, opacity: 0.9 }));
+    group.add(makeCloudPuff(63, 9, -150, { scale: 1.35, opacity: 0.9 }));
+    return group;
+  }
+
+  function ensureRainbowGroup() {
+    if (!rainbowGroup) {
+      rainbowGroup = createRainbowGroup();
+      weatherRoot.add(rainbowGroup);
+    }
+    return rainbowGroup;
+  }
+
+  function updateRainbow(elapsed) {
+    if (!rainbowGroup || !rainbowGroup.visible) return;
+
+    for (let i = 0; i < rainbowGroup.userData.bands.length; i++) {
+      const band = rainbowGroup.userData.bands[i];
+      band.position.y = band.userData.baseY + Math.sin(elapsed * 0.55 + band.userData.phase) * 0.08;
+      band.material.emissiveIntensity = 0.14 + Math.sin(elapsed * 0.75 + band.userData.phase) * 0.035;
+
+      const glow = rainbowGroup.userData.glows[i];
+      if (glow) {
+        glow.position.y = glow.userData.baseY + Math.sin(elapsed * 0.55 + glow.userData.phase) * 0.08;
+        glow.material.opacity = glow.userData.baseOpacity + Math.sin(elapsed * 0.75 + glow.userData.phase) * 0.05;
+      }
+    }
+  }
+
+  function hideSpecialEffects() {
+    if (gradientSky) gradientSky.visible = false;
+    if (nightStars) nightStars.visible = false;
+    if (rainSystem) rainSystem.visible = false;
+    if (snowSystem) snowSystem.visible = false;
+    if (sunsetClouds) sunsetClouds.visible = false;
+    if (auroraGroup) auroraGroup.visible = false;
+    if (rainbowGroup) rainbowGroup.visible = false;
+  }
 
   function applyDayNight(day) {
-    // expose current day/night state for zones that create lights later
     scene.userData.isDay = Boolean(day);
-    
-    // Atmospheric setup - create distinct day/night appearance
+
     if (scene.fog) {
       if (day) {
         scene.fog.color.set(0xcde6ff);
         scene.fog.density = 0.00075;
       } else {
-        // Stronger fog at night for atmosphere and light visibility
         scene.fog.color.set(0x02030a);
         scene.fog.density = 0.004;
       }
     }
-    
-    // Adjust clear color for sky gradient
+
     renderer.setClearColor(day ? 0xa6d8ff : 0x02030a);
 
     if (day) {
       scene.background = daySkyTexture;
       scene.environment = daySkyTexture;
     } else {
-      scene.background = null;
-      scene.environment = null;
+      scene.background = nightSkyTexture;
+      scene.environment = nightSkyTexture;
     }
 
-    // Directional light and shadows are intentionally different between day and night.
     if (day) {
       dir.color.set(0xfff1d6);
       dir.intensity = 0.78;
@@ -1261,6 +2019,7 @@ animate();
       dir.shadow.camera.bottom = -DAY_SHADOW_BOUNDS;
       sun.visible = true;
       moon.visible = false;
+      sun.position.copy(dir.position);
     } else {
       dir.color.set(0x90a9e6);
       dir.intensity = 0.26;
@@ -1279,121 +2038,240 @@ animate();
       sun.visible = false;
       moon.visible = true;
     }
+
     dir.target.position.copy(SHADOW_TARGET_POS);
     dir.target.updateMatrixWorld(true);
     dir.shadow.camera.updateProjectionMatrix();
     dir.shadow.needsUpdate = true;
     updateNightStreetlightShadowCasters(true);
 
-    // Hemisphere light (sky/ground ambient)
     if (day) {
-      hemi.color.set(0xffffff);        // White sky
-      hemi.groundColor.set(0xcfd6e6);  // Light ground reflection
+      hemi.color.set(0xffffff);
+      hemi.groundColor.set(0xcfd6e6);
       hemi.intensity = 0.26;
+      setAmbientIntensity(0.24);
     } else {
-      hemi.color.set(0x0a1b2e);        // Dark night sky
-      hemi.groundColor.set(0x02040a);  // Very dark ground
+      hemi.color.set(0x0a1b2e);
+      hemi.groundColor.set(0x02040a);
       hemi.intensity = 0.05;
+      setAmbientIntensity(0.035);
     }
 
-    // Ambient lights - provide overall illumination
-    const ambs = [];
-    scene.traverse((o) => { if (o.isAmbientLight) ambs.push(o); });
-    for (const a of ambs) {
-      a.intensity = day ? 0.24 : 0.035;
-    }
-
-    // Adjust emissive materials throughout the scene
-    // During day: dim emissive (bulbs not lit)
-    // During night: full emissive (bulbs lit)
     scene.traverse((o) => {
-      if (o.isMesh && o.material) {
-        const m = o.material;
-        if (m.emissive !== undefined) {
-          // For streetlight bulbs, turn off completely during day
-          // For other emissive materials, dim slightly
-          const isStreetlightBulb = o.userData && o.userData._origEmissiveIntensity !== undefined;
-          if (day) {
-            m.emissiveIntensity = 0;
-          } else {
-            m.emissiveIntensity = isStreetlightBulb ? 1.2 : 0.8;
-          }
-        }
+      if (!o.isMesh || !o.material) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const mat of mats) {
+        if (!mat || mat.emissive === undefined) continue;
+        const isStreetlightBulb = o.userData && o.userData._origEmissiveIntensity !== undefined;
+        if (day) mat.emissiveIntensity = 0;
+        else mat.emissiveIntensity = isStreetlightBulb ? (o.userData._origEmissiveIntensity || 1.2) : 0.8;
       }
     });
 
-    // Toggle streetlight SpotLights and lamp/bulb emissives registered by zones
-    // This ensures all lights are properly controlled
     try {
       const sLights = (scene.userData && scene.userData.streetLights) ? scene.userData.streetLights : [];
       for (const sl of sLights) {
         try {
-          if (day) {
-            sl.intensity = 0;  // Turn off during day
-          } else {
-            // Restore original intensity at night
-            if (sl.userData && typeof sl.userData._origIntensity === 'number') {
-              sl.intensity = sl.userData._origIntensity;
-            } else {
-              sl.intensity = 2.0;  // Fallback intensity
-            }
-          }
-          // Keep lights in scene at all times for efficient toggling
+          if (day) sl.intensity = 0;
+          else if (sl.userData && typeof sl.userData._origIntensity === 'number') sl.intensity = sl.userData._origIntensity;
+          else sl.intensity = 2.0;
           sl.visible = true;
         } catch (e) {}
       }
 
-      // Toggle emissive materials on bulbs and fixtures
       const sMeshes = (scene.userData && scene.userData.streetLightMeshes) ? scene.userData.streetLightMeshes : [];
-      for (const m of sMeshes) {
+      for (const mesh of sMeshes) {
         try {
-          m.visible = true;  // Keep meshes visible
-          const mats = Array.isArray(m.material) ? m.material : [m.material];
+          mesh.visible = true;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           for (const mat of mats) {
             if (mat && mat.emissive !== undefined) {
-              if (day) {
-                mat.emissiveIntensity = 0;  // Dim at day
-              } else {
-                // Restore original at night
-                mat.emissiveIntensity = (m.userData && typeof m.userData._origEmissiveIntensity === 'number') 
-                  ? m.userData._origEmissiveIntensity 
-                  : 1;
-              }
+              if (day) mat.emissiveIntensity = 0;
+              else mat.emissiveIntensity = (mesh.userData && typeof mesh.userData._origEmissiveIntensity === 'number') ? mesh.userData._origEmissiveIntensity : 1;
             }
           }
         } catch (e) {}
       }
 
-      // Toggle visual light cones (decorative visualization of light spread)
-      try {
-        const cones = (scene.userData && scene.userData.streetLightCones) ? scene.userData.streetLightCones : [];
-        for (const c of cones) {
-          try {
-            c.visible = !day;  // Hide cones during day
-            const mats = Array.isArray(c.material) ? c.material : [c.material];
-            for (const mat of mats) {
-              if (mat && typeof mat.opacity === 'number') {
-                if (day) {
-                  mat.opacity = 0;  // Transparent during day
-                } else {
-                  // Restore original opacity at night
-                  const orig = (c.userData && typeof c.userData._origOpacity === 'number') 
-                    ? c.userData._origOpacity 
-                    : 0.04;
-                  mat.opacity = orig;
-                }
-                mat.transparent = (mat.opacity < 1);
-              }
-            }
-          } catch (e) {}
-        }
-      } catch (e) {}
+      const cones = (scene.userData && scene.userData.streetLightCones) ? scene.userData.streetLightCones : [];
+      for (const cone of cones) {
+        try {
+          cone.visible = !day;
+          const mats = Array.isArray(cone.material) ? cone.material : [cone.material];
+          for (const mat of mats) {
+            if (!mat || typeof mat.opacity !== 'number') continue;
+            mat.opacity = day ? 0 : ((cone.userData && typeof cone.userData._origOpacity === 'number') ? cone.userData._origOpacity : 0.04);
+            mat.transparent = mat.opacity < 1;
+          }
+        } catch (e) {}
+      }
     } catch (e) {
-      // Silently ignore toggling errors
+      // keep game running even if one light entry is malformed
     }
   }
 
-  const weatherOptions = Array.from(document.querySelectorAll('.weather-option[data-weather]'));
+  function syncParticleDrivenEffects() {
+    if (nightStars) nightStars.visible = currentWeather === 'night' && particlesEnabled;
+    if (rainSystem) rainSystem.visible = currentWeather === 'rainy' && particlesEnabled;
+    if (snowSystem) snowSystem.visible = currentWeather === 'snowy' && particlesEnabled;
+    if (auroraGroup) auroraGroup.visible = currentWeather === 'northern-lights' && particlesEnabled;
+    if (rainbowGroup) rainbowGroup.visible = currentWeather === 'rainbow' && particlesEnabled;
+  }
+
+  function applyWeather(name) {
+    const allowedWeather = new Set(['sunny', 'night', 'sunset', 'rainy', 'northern-lights', 'rainbow', 'snowy']);
+    currentWeather = allowedWeather.has(name) ? name : 'sunny';
+
+    hideSpecialEffects();
+    applyGroundTextureSet(grassGroundTex, false);
+
+    switch (currentWeather) {
+      case 'night': {
+        applyDayNight(false);
+        scene.background = null;
+        scene.environment = null;
+        renderer.setClearColor(0x01030c);
+        if (scene.fog) {
+          scene.fog.color.set(0x030512);
+          scene.fog.density = 0.0038;
+        }
+        setGradientSky(0x0d1a34, 0x070b18, 0x010106);
+        ensureGradientSky().visible = true;
+        ensureNightStars();
+        break;
+      }
+      case 'sunset': {
+        applyDayNight(true);
+        scene.background = null;
+        scene.environment = daySkyTexture;
+        renderer.setClearColor(0xf59b5e);
+        if (scene.fog) {
+          scene.fog.color.set(0xf2a577);
+          scene.fog.density = 0.00145;
+        }
+        setGradientSky(0x3f5da8, 0xff8f4f, 0xffcd8f);
+        ensureGradientSky().visible = true;
+        dir.color.set(0xffb36a);
+        dir.intensity = 0.56;
+        dir.position.set(42, 14, -33);
+        dir.target.position.copy(SHADOW_TARGET_POS);
+        dir.target.updateMatrixWorld(true);
+        dir.shadow.camera.updateProjectionMatrix();
+        dir.shadow.needsUpdate = true;
+        sun.visible = true;
+        sun.position.copy(dir.position);
+        moon.visible = false;
+        hemi.color.set(0xffcfaa);
+        hemi.groundColor.set(0x6f4f37);
+        hemi.intensity = 0.25;
+        setAmbientIntensity(0.21);
+        ensureSunsetClouds().visible = true;
+        break;
+      }
+      case 'rainy': {
+        applyDayNight(true);
+        scene.background = null;
+        scene.environment = daySkyTexture;
+        renderer.setClearColor(0x8599aa);
+        if (scene.fog) {
+          scene.fog.color.set(0x8ca0af);
+          scene.fog.density = 0.0026;
+        }
+        setGradientSky(0x465d73, 0x72889a, 0xb8c7d2);
+        ensureGradientSky().visible = true;
+        dir.color.set(0xdde6ef);
+        dir.intensity = 0.54;
+        sun.visible = false;
+        moon.visible = false;
+        hemi.color.set(0xdce6ee);
+        hemi.groundColor.set(0x5f6a74);
+        hemi.intensity = 0.19;
+        setAmbientIntensity(0.18);
+        ensureRainSystem();
+        break;
+      }
+      case 'northern-lights': {
+        applyDayNight(false);
+        scene.background = northernLightsSkyTexture;
+        scene.environment = northernLightsSkyTexture;
+        renderer.setClearColor(0x051020);
+        if (scene.fog) {
+          scene.fog.color.set(0x061625);
+          scene.fog.density = 0.0032;
+        }
+        dir.color.set(0x95b1f2);
+        dir.intensity = 0.24;
+        hemi.color.set(0x9ed7e5);
+        hemi.groundColor.set(0x07131d);
+        hemi.intensity = 0.08;
+        setAmbientIntensity(0.05);
+        ensureAuroraGroup();
+        break;
+      }
+      case 'rainbow': {
+        applyDayNight(true);
+        scene.background = null;
+        scene.environment = null;
+        renderer.setClearColor(0x96dcff);
+        if (scene.fog) {
+          scene.fog.color.set(0xd5ecfa);
+          scene.fog.density = 0.00085;
+        }
+        setGradientSky(0x6bc6ff, 0x95ddff, 0xeaf8ff);
+        ensureGradientSky().visible = true;
+        dir.color.set(0xfff2cf);
+        dir.intensity = 0.8;
+        sun.visible = true;
+        moon.visible = false;
+        hemi.color.set(0xf4fbff);
+        hemi.groundColor.set(0xc7d8e3);
+        hemi.intensity = 0.28;
+        setAmbientIntensity(0.25);
+        ensureRainbowGroup().visible = true;
+        break;
+      }
+      case 'snowy': {
+        applyDayNight(true);
+        scene.background = null;
+        scene.environment = null;
+        renderer.setClearColor(0xd8e4ef);
+        if (scene.fog) {
+          scene.fog.color.set(0xc8d7e6);
+          scene.fog.density = 0.0042;
+        }
+        setGradientSky(0xb0bfd0, 0xd4e0ea, 0xf5f9ff);
+        ensureGradientSky().visible = true;
+        dir.color.set(0xf4f8ff);
+        dir.intensity = 0.56;
+        sun.visible = false;
+        moon.visible = false;
+        hemi.color.set(0xe8f3ff);
+        hemi.groundColor.set(0xbfccd8);
+        hemi.intensity = 0.24;
+        setAmbientIntensity(0.2);
+        applyGroundTextureSet(snowGroundTex, true);
+        ensureSnowSystem();
+        break;
+      }
+      case 'sunny':
+      default: {
+        applyDayNight(true);
+        scene.background = daySkyTexture;
+        scene.environment = daySkyTexture;
+        renderer.setClearColor(0xa6d8ff);
+        if (scene.fog) {
+          scene.fog.color.set(0xcde6ff);
+          scene.fog.density = 0.00075;
+        }
+        applyGroundTextureSet(grassGroundTex, false);
+        break;
+      }
+    }
+
+    syncParticleDrivenEffects();
+    scene.userData.currentWeather = currentWeather;
+    markActiveWeather(currentWeather);
+  }
 
   function markActiveWeather(name) {
     weatherOptions.forEach((btn) => {
@@ -1403,13 +2281,7 @@ animate();
     });
   }
 
-  function applyWeather(name) {
-    currentWeather = name;
-    if (name === 'night') applyDayNight(false);
-    else applyDayNight(true);
-    markActiveWeather(name);
-  }
-
+  const weatherOptions = Array.from(document.querySelectorAll('.weather-option[data-weather]'));
   weatherOptions.forEach((btn) => {
     btn.addEventListener('click', () => {
       const requested = btn.dataset.weather;
@@ -1418,6 +2290,36 @@ animate();
     });
   });
 
-  // initialize weather to sunny
+  if (settingParticles) {
+    settingParticles.checked = true;
+    particlesEnabled = settingParticles.checked;
+    settingParticles.addEventListener('change', () => {
+      particlesEnabled = settingParticles.checked;
+      syncParticleDrivenEffects();
+    });
+  }
+
+  scene.userData.updateWeatherEffects = (elapsed, dt) => {
+    const followPos = (controls && controls.getObject) ? controls.getObject().position : camera.position;
+
+    if (gradientSky && gradientSky.visible) {
+      gradientSky.position.copy(followPos);
+    }
+
+    if (nightStars && nightStars.visible) {
+      nightStars.position.set(followPos.x, 0, followPos.z);
+      const layers = nightStars.userData.layers || [];
+      for (const layer of layers) {
+        layer.material.opacity = layer.baseOpacity + Math.sin(elapsed * layer.pulseSpeed + layer.pulseOffset) * 0.16;
+      }
+    }
+
+    if (rainSystem && rainSystem.visible && particlesEnabled) updateRainStreaks(rainSystem, elapsed, dt, followPos);
+    if (snowSystem && snowSystem.visible && particlesEnabled) updateSnowParticles(snowSystem, elapsed, dt, followPos);
+    if (sunsetClouds && sunsetClouds.visible) updateSunsetClouds(elapsed, followPos);
+    if (auroraGroup && auroraGroup.visible && particlesEnabled) updateAurora(elapsed, followPos);
+    if (rainbowGroup && rainbowGroup.visible) updateRainbow(elapsed);
+  };
+
   applyWeather(currentWeather);
 })();
