@@ -1802,6 +1802,39 @@ animate();
     }
   }
 
+  function makeCloudPuff(x, y, z, {
+    color = 0xf8fbff,
+    opacity = 0.9,
+    roughness = 0.92,
+    metalness = 0.0,
+    scale = 1
+  } = {}) {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    const cloudMat = new THREE.MeshStandardMaterial({
+      color,
+      roughness,
+      metalness,
+      transparent: true,
+      opacity
+    });
+
+    for (let i = 0; i < 4; i++) {
+      const puff = new THREE.Mesh(
+        new THREE.SphereGeometry((4 + Math.random() * 2.4) * scale, 18, 14),
+        cloudMat
+      );
+      puff.position.set((i - 1.5) * 2.7 * scale, Math.random() * 1.7 * scale, (Math.random() - 0.5) * 2.4 * scale);
+      puff.userData.noAutoShadow = true;
+      puff.userData.noCollision = true;
+      group.add(puff);
+    }
+
+    group.userData.noAutoShadow = true;
+    group.userData.noCollision = true;
+    return group;
+  }
+
   function createRainbowBand(radius, tubeRadius, color) {
     const points = [];
     for (let i = 0; i <= 72; i++) {
@@ -1874,19 +1907,21 @@ animate();
     ];
 
     for (let i = 0; i < colors.length; i++) {
-      const band = createRainbowBand(62 - i * 1.55, 0.74, colors[i]);
-      const glow = createRainbowGlow(62 - i * 1.55, 0.7, colors[i]);
+      const band = createRainbowBand(112 - i * 2.2, 1.12, colors[i]);
+      const glow = createRainbowGlow(112 - i * 2.2, 1.05, colors[i]);
 
-      band.position.set(0, 14.5, -150);
-      band.rotation.y = -0.03;
+      band.position.set(0, 37, -255);
+      band.rotation.y = -0.02;
       glow.position.copy(band.position);
       glow.rotation.copy(band.rotation);
 
       band.userData.baseY = band.position.y;
+      band.userData.baseX = band.position.x;
       band.userData.phase = Math.random() * Math.PI * 2;
       band.userData.noAutoShadow = true;
       band.userData.noCollision = true;
       glow.userData.baseY = glow.position.y;
+      glow.userData.baseX = glow.position.x;
       glow.userData.phase = band.userData.phase;
       glow.userData.baseOpacity = glow.material.opacity;
       group.add(band);
@@ -1895,8 +1930,12 @@ animate();
       group.userData.glows.push(glow);
     }
 
-    group.add(makeCloudPuff(-63, 9, -150, { scale: 1.35, opacity: 0.9 }));
-    group.add(makeCloudPuff(63, 9, -150, { scale: 1.35, opacity: 0.9 }));
+    const leftCloud = makeCloudPuff(-100, 28, -246, { color: 0xffffff, scale: 2.1, opacity: 0.76 });
+    const rightCloud = makeCloudPuff(100, 28, -246, { color: 0xffffff, scale: 2.1, opacity: 0.76 });
+    leftCloud.rotation.y = 0.2;
+    rightCloud.rotation.y = -0.2;
+    group.add(leftCloud);
+    group.add(rightCloud);
     return group;
   }
 
@@ -1908,18 +1947,21 @@ animate();
     return rainbowGroup;
   }
 
-  function updateRainbow(elapsed) {
+  function updateRainbow(elapsed, followPos) {
     if (!rainbowGroup || !rainbowGroup.visible) return;
+    rainbowGroup.position.set(followPos.x, 0, followPos.z);
 
     for (let i = 0; i < rainbowGroup.userData.bands.length; i++) {
       const band = rainbowGroup.userData.bands[i];
-      band.position.y = band.userData.baseY + Math.sin(elapsed * 0.55 + band.userData.phase) * 0.08;
-      band.material.emissiveIntensity = 0.14 + Math.sin(elapsed * 0.75 + band.userData.phase) * 0.035;
+      band.position.x = band.userData.baseX + Math.sin(elapsed * 0.12 + band.userData.phase) * 1.4;
+      band.position.y = band.userData.baseY + Math.sin(elapsed * 0.34 + band.userData.phase) * 0.22;
+      band.material.emissiveIntensity = 0.24 + Math.sin(elapsed * 0.45 + band.userData.phase) * 0.05;
 
       const glow = rainbowGroup.userData.glows[i];
       if (glow) {
-        glow.position.y = glow.userData.baseY + Math.sin(elapsed * 0.55 + glow.userData.phase) * 0.08;
-        glow.material.opacity = glow.userData.baseOpacity + Math.sin(elapsed * 0.75 + glow.userData.phase) * 0.05;
+        glow.position.x = glow.userData.baseX + Math.sin(elapsed * 0.12 + glow.userData.phase) * 1.4;
+        glow.position.y = glow.userData.baseY + Math.sin(elapsed * 0.34 + glow.userData.phase) * 0.22;
+        glow.material.opacity = glow.userData.baseOpacity + Math.sin(elapsed * 0.45 + glow.userData.phase) * 0.035;
       }
     }
   }
@@ -2175,22 +2217,28 @@ animate();
       case 'rainbow': {
         applyDayNight(true);
         scene.background = null;
-        scene.environment = null;
-        renderer.setClearColor(0x96dcff);
+        scene.environment = daySkyTexture;
+        renderer.setClearColor(0x8fdcff);
         if (scene.fog) {
-          scene.fog.color.set(0xd5ecfa);
-          scene.fog.density = 0.00085;
+          scene.fog.color.set(0xe7f5ff);
+          scene.fog.density = 0.00055;
         }
-        setGradientSky(0x6bc6ff, 0x95ddff, 0xeaf8ff);
+        setGradientSky(0x79caff, 0xc1efff, 0xfff7fb);
         ensureGradientSky().visible = true;
-        dir.color.set(0xfff2cf);
-        dir.intensity = 0.8;
+        dir.color.set(0xfff6d8);
+        dir.intensity = 0.7;
+        dir.position.set(40, 42, -28);
+        dir.target.position.copy(SHADOW_TARGET_POS);
+        dir.target.updateMatrixWorld(true);
+        dir.shadow.camera.updateProjectionMatrix();
+        dir.shadow.needsUpdate = true;
         sun.visible = true;
+        sun.position.copy(dir.position);
         moon.visible = false;
-        hemi.color.set(0xf4fbff);
-        hemi.groundColor.set(0xc7d8e3);
-        hemi.intensity = 0.28;
-        setAmbientIntensity(0.25);
+        hemi.color.set(0xf8fbff);
+        hemi.groundColor.set(0xe0d2ef);
+        hemi.intensity = 0.34;
+        setAmbientIntensity(0.3);
         ensureRainbowGroup().visible = true;
         break;
       }
@@ -2290,7 +2338,7 @@ animate();
     if (rainSystem && rainSystem.visible && particlesEnabled) updateRainStreaks(rainSystem, elapsed, dt, followPos);
     if (snowSystem && snowSystem.visible && particlesEnabled) updateSnowParticles(snowSystem, elapsed, dt, followPos);
     if (auroraGroup && auroraGroup.visible && particlesEnabled) updateAurora(elapsed, followPos);
-    if (rainbowGroup && rainbowGroup.visible) updateRainbow(elapsed);
+    if (rainbowGroup && rainbowGroup.visible) updateRainbow(elapsed, followPos);
   };
 
   applyWeather(currentWeather);
