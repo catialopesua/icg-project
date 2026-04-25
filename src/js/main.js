@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createGardenZone } from './garden.js';
 import { createCityZone } from './city.js';
 import { createBeachZone } from './beach.js';
+import { createForestZone } from './forest.js';
 
 // Scene & renderer
 const container = document.getElementById('canvas-container') || document.body;
@@ -751,6 +752,7 @@ scene.add(ground);
 
 // create zones placed around the map
 createGardenZone(scene, -18, 12);
+createForestZone(scene, -18, 12);
 
 createCityZone(scene, 22, -4);
 const beachZone = createBeachZone(scene, 0, 12);
@@ -975,6 +977,26 @@ function smoothModelShading(model) {
     } catch (e) {
       console.warn('Smoothing attempt failed on mesh', node, e);
     }
+  });
+}
+
+function tuneTreeMaterials(model) {
+  model.traverse((node) => {
+    if (!node.isMesh || !node.material) return;
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    materials.forEach((material) => {
+      if (!material) return;
+      const materialName = String(material.name || '').toLowerCase();
+      if (materialName.includes('leaf')) {
+        material.color.set(0x5f9d45);
+        if (material.emissive) material.emissive.set(0x000000);
+        material.vertexColors = false;
+        material.side = THREE.DoubleSide;
+        material.alphaTest = Math.max(material.alphaTest || 0, 0.35);
+        material.transparent = false;
+        material.needsUpdate = true;
+      }
+    });
   });
 }
 
