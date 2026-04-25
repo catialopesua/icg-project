@@ -104,6 +104,27 @@
       width: 100%;
     }
 
+    .mode-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    button.active-mode {
+      background: #184f22;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.28);
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+
     textarea {
       width: 100%;
       min-height: 170px;
@@ -122,9 +143,17 @@
 
   <aside class="debug-panel">
     <h1>Forest Debug Mode</h1>
-    <p>Click empty ground to add a tree. Click near a tree to select it. Click again somewhere else to move the selected tree. Hold <strong>Shift</strong> and click near a tree to delete it.</p>
-    <p>Press <strong>R</strong> to rotate the selected tree by the chosen step. Press <strong>Escape</strong> to clear the selection.</p>
+    <p>Use <strong>Paint Trees</strong> to click or drag and place lots of trees fast. Use <strong>Select Trees</strong> to move, rotate, or delete them.</p>
+    <p>In select mode, click near a tree to select it, click elsewhere to move it, hold <strong>Shift</strong> and click to delete, and press <strong>R</strong> to rotate.</p>
     <div id="debug-status" class="status">Loading map...</div>
+    <div class="mode-row">
+      <button id="paint-mode" class="active-mode" type="button">Paint Trees</button>
+      <button id="select-mode" class="secondary" type="button">Select Trees</button>
+    </div>
+    <div class="toggle-row">
+      <span>Auto-save to map</span>
+      <label><input id="autosave-toggle" type="checkbox" checked /> Live</label>
+    </div>
     <div class="rotation-row">
       <span>Rotate step</span>
       <input id="rotation-step" type="range" min="5" max="90" step="5" value="15" />

@@ -15,6 +15,7 @@ import {
 const PARK_CENTER_X = -18;
 const PARK_CENTER_Z = 12;
 const TREE_SELECT_RADIUS = 2.35;
+const TREE_PAINT_SPACING = 2.8;
 
 const container = document.getElementById('canvas-container');
 const statusEl = document.getElementById('debug-status');
@@ -25,6 +26,9 @@ const resetButton = document.getElementById('reset-layout');
 const clearSavedButton = document.getElementById('clear-saved');
 const rotationStepInput = document.getElementById('rotation-step');
 const rotationStepValue = document.getElementById('rotation-step-value');
+const paintModeButton = document.getElementById('paint-mode');
+const selectModeButton = document.getElementById('select-mode');
+const autosaveToggle = document.getElementById('autosave-toggle');
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xdce9d9);
@@ -134,6 +138,10 @@ scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(parkOutlinePoi
 
 let layout = loadForestTreeLayout();
 let selectedIndex = -1;
+let editorMode = 'paint';
+let isPainting = false;
+let lastPaintPoint = null;
+let pointerDown = null;
 
 const forestController = createForestZone(scene, PARK_CENTER_X, PARK_CENTER_Z, {
   layout,
@@ -149,7 +157,14 @@ function cloneDefaultLayout() {
 }
 
 function updateRotationLabel() {
-  rotationStepValue.textContent = `${rotationStepInput.value}°`;
+  rotationStepValue.textContent = `${rotationStepInput.value} deg`;
+}
+
+function updateModeButtons() {
+  paintModeButton.classList.toggle('active-mode', editorMode === 'paint');
+  paintModeButton.classList.toggle('secondary', editorMode !== 'paint');
+  selectModeButton.classList.toggle('active-mode', editorMode === 'select');
+  selectModeButton.classList.toggle('secondary', editorMode !== 'select');
 }
 
 function worldFromLayout(item) {
@@ -161,6 +176,11 @@ function worldFromLayout(item) {
 
 function updateOutput() {
   outputEl.value = layoutToCode(layout);
+}
+
+function persistIfAutosave() {
+  if (!autosaveToggle.checked) return;
+  layout = saveForestTreeLayout(layout);
 }
 
 function setStatus(message) {
@@ -196,16 +216,24 @@ function refreshMarkers() {
   });
 }
 
-function syncForest() {
+function syncForest(statusOverride = '') {
+  persistIfAutosave();
   forestController.setLayout(layout);
   updateOutput();
   refreshMarkers();
 
+  if (statusOverride) {
+    setStatus(statusOverride);
+    return;
+  }
+
   if (selectedIndex >= 0 && layout[selectedIndex]) {
     const item = layout[selectedIndex];
-    setStatus(`Selected tree ${selectedIndex + 1} at dx ${item.dx.toFixed(1)}, dz ${item.dz.toFixed(1)}, rot ${item.rotationY.toFixed(2)}.`);
+    setStatus(`Select mode. Tree ${selectedIndex + 1} at dx ${item.dx.toFixed(1)}, dz ${item.dz.toFixed(1)}, rot ${item.rotationY.toFixed(2)}.`);
+  } else if (editorMode === 'paint') {
+    setStatus(`Paint mode. ${layout.length} trees in layout. Click or drag to add many trees.`);
   } else {
-    setStatus(`${layout.length} trees in layout. Click ground to add, click a tree to select.`);
+    setStatus(`Select mode. ${layout.length} trees in layout. Click near a tree to move or remove it.`);
   }
 }
 
@@ -228,13 +256,17 @@ function findNearestTreeIndex(worldX, worldZ, maxDistance = TREE_SELECT_RADIUS) 
 }
 
 function addTreeAt(worldX, worldZ) {
+  if (findNearestTreeIndex(worldX, worldZ, TREE_PAINT_SPACING * 0.8) >= 0) return false;
+
   layout.push({
     dx: Number((worldX - PARK_CENTER_X).toFixed(1)),
     dz: Number((worldZ - PARK_CENTER_Z).toFixed(1)),
     rotationY: 0
   });
-  selectedIndex = layout.length - 1;
+
+  selectedIndex = editorMode === 'select' ? layout.length - 1 : -1;
   syncForest();
+  return true;
 }
 
 function moveSelectedTree(worldX, worldZ) {
@@ -252,7 +284,7 @@ function removeTreeAt(index) {
   layout.splice(index, 1);
   if (selectedIndex === index) selectedIndex = -1;
   else if (selectedIndex > index) selectedIndex -= 1;
-  syncForest();
+  syncForest('Tree removed.');
 }
 
 function rotateSelectedTree() {
@@ -265,9 +297,15 @@ function rotateSelectedTree() {
   syncForest();
 }
 
+function setEditorMode(mode) {
+  editorMode = mode === 'select' ? 'select' : 'paint';
+  if (editorMode === 'paint') selectedIndex = -1;
+  updateModeButtons();
+  syncForest();
+}
+
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
-let pointerDown = null;
 
 function setPointerFromEvent(event) {
   const rect = renderer.domElement.getBoundingClientRect();
@@ -282,11 +320,35 @@ function intersectGround(event) {
   return hits.length ? hits[0].point : null;
 }
 
+function maybePaintTree(point) {
+  if (!point) return;
+  if (lastPaintPoint && lastPaintPoint.distanceTo(point) < TREE_PAINT_SPACING) return;
+  if (addTreeAt(point.x, point.z)) lastPaintPoint = point.clone();
+}
+
 renderer.domElement.addEventListener('pointerdown', (event) => {
   pointerDown = { x: event.clientX, y: event.clientY };
+
+  if (editorMode !== 'paint' || event.button !== 0) return;
+  isPainting = true;
+  lastPaintPoint = null;
+  maybePaintTree(intersectGround(event));
+});
+
+renderer.domElement.addEventListener('pointermove', (event) => {
+  if (!isPainting || editorMode !== 'paint') return;
+  maybePaintTree(intersectGround(event));
 });
 
 renderer.domElement.addEventListener('pointerup', (event) => {
+  if (editorMode === 'paint') {
+    isPainting = false;
+    lastPaintPoint = null;
+    pointerDown = null;
+    syncForest();
+    return;
+  }
+
   if (!pointerDown) return;
   const moved = Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y);
   pointerDown = null;
@@ -298,10 +360,7 @@ renderer.domElement.addEventListener('pointerup', (event) => {
   const nearestIndex = findNearestTreeIndex(point.x, point.z);
 
   if (event.shiftKey) {
-    if (nearestIndex >= 0) {
-      removeTreeAt(nearestIndex);
-      setStatus('Tree removed.');
-    }
+    if (nearestIndex >= 0) removeTreeAt(nearestIndex);
     return;
   }
 
@@ -319,22 +378,43 @@ renderer.domElement.addEventListener('pointerup', (event) => {
   addTreeAt(point.x, point.z);
 });
 
+renderer.domElement.addEventListener('pointerleave', () => {
+  isPainting = false;
+  lastPaintPoint = null;
+  pointerDown = null;
+});
+
 window.addEventListener('keydown', (event) => {
   if (event.code === 'KeyR') {
     rotateSelectedTree();
   } else if (event.code === 'Escape') {
     selectedIndex = -1;
     syncForest();
+  } else if (event.code === 'KeyP') {
+    setEditorMode('paint');
+  } else if (event.code === 'KeyM') {
+    setEditorMode('select');
   }
 });
 
 rotationStepInput.addEventListener('input', updateRotationLabel);
+paintModeButton.addEventListener('click', () => setEditorMode('paint'));
+selectModeButton.addEventListener('click', () => setEditorMode('select'));
+
+autosaveToggle.addEventListener('change', () => {
+  if (autosaveToggle.checked) {
+    layout = saveForestTreeLayout(layout);
+    setStatus('Auto-save is on. New edits will update the map live.');
+  } else {
+    setStatus('Auto-save is off. Use Save To Map when you want to push changes.');
+  }
+});
 
 saveButton.addEventListener('click', () => {
   layout = saveForestTreeLayout(layout);
   forestController.setLayout(layout);
   updateOutput();
-  setStatus('Saved. Reload `play.html` and the real map will use this tree layout.');
+  setStatus('Saved to the map. You can keep placing trees right away.');
 });
 
 copyButton.addEventListener('click', async () => {
@@ -352,13 +432,12 @@ copyButton.addEventListener('click', async () => {
 resetButton.addEventListener('click', () => {
   layout = cloneDefaultLayout();
   selectedIndex = -1;
-  syncForest();
-  setStatus('Reset to the default forest layout.');
+  syncForest('Reset to the default forest layout.');
 });
 
 clearSavedButton.addEventListener('click', () => {
   clearForestTreeLayout();
-  setStatus('Saved override cleared. `play.html` will fall back to the code layout after reload.');
+  setStatus('Saved override cleared. The live map will now fall back to the code layout.');
 });
 
 window.addEventListener('resize', () => {
@@ -377,5 +456,6 @@ function animate() {
 }
 
 updateRotationLabel();
+updateModeButtons();
 syncForest();
 animate();

@@ -158,16 +158,11 @@ function tuneTreeMaterials(model) {
     const materials = Array.isArray(node.material) ? node.material : [node.material];
     materials.forEach((material) => {
       if (!material) return;
-      const materialName = String(material.name || '').toLowerCase();
-      if (materialName.includes('leaf')) {
-        material.color.set(0x2c851d);
-        if (material.emissive) material.emissive.set(0x000000);
-        material.vertexColors = false;
-        material.side = THREE.DoubleSide;
-        material.alphaTest = Math.max(material.alphaTest || 0, 0.35);
-        material.transparent = false;
-        material.needsUpdate = true;
-      }
+      material.vertexColors = false;
+      material.side = THREE.DoubleSide;
+      material.transparent = false;
+      if (material.emissive) material.emissive.set(0x000000);
+      material.needsUpdate = true;
     });
   });
 }
