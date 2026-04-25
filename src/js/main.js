@@ -752,7 +752,7 @@ scene.add(ground);
 
 // create zones placed around the map
 createGardenZone(scene, -18, 12);
-createForestZone(scene, -18, 12);
+const forestZone = createForestZone(scene, -18, 12);
 
 createCityZone(scene, 22, -4);
 const beachZone = createBeachZone(scene, 0, 12);
@@ -2304,6 +2304,9 @@ animate();
     }
 
     syncParticleDrivenEffects();
+    if (forestZone && typeof forestZone.setVariant === 'function') {
+      forestZone.setVariant(currentWeather === 'snowy' ? 'snowy' : 'default');
+    }
     scene.userData.currentWeather = currentWeather;
     markActiveWeather(currentWeather);
   }

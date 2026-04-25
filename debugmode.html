@@ -38,7 +38,7 @@
       position: fixed;
       top: 16px;
       left: 16px;
-      width: min(360px, calc(100vw - 32px));
+      width: min(380px, calc(100vw - 32px));
       padding: 14px;
       border-radius: 8px;
       background: rgba(249, 252, 246, 0.94);
@@ -91,6 +91,39 @@
       background: #8f4848;
     }
 
+    button.active-mode {
+      background: #184f22;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.28);
+    }
+
+    .mode-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+
+    .palette {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .palette button {
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+
     .rotation-row {
       display: grid;
       grid-template-columns: auto 1fr auto;
@@ -102,27 +135,6 @@
 
     .rotation-row input {
       width: 100%;
-    }
-
-    .mode-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-
-    button.active-mode {
-      background: #184f22;
-      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.28);
-    }
-
-    .toggle-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 10px;
-      font-size: 13px;
     }
 
     textarea {
@@ -143,25 +155,33 @@
 
   <aside class="debug-panel">
     <h1>Forest Debug Mode</h1>
-    <p>Use <strong>Paint Trees</strong> to click or drag and place lots of trees fast. Use <strong>Select Trees</strong> to move, rotate, or delete them.</p>
-    <p>In select mode, click near a tree to select it, click elsewhere to move it, hold <strong>Shift</strong> and click to delete, and press <strong>R</strong> to rotate.</p>
+    <p>Use paint mode to place trees, grass, and rocks quickly. Drag to add many items fast. Use select mode to move, rotate, or delete them.</p>
+    <p>In select mode, click near an item to select it, click elsewhere to move it, hold <strong>Shift</strong> and click to delete, and press <strong>R</strong> to rotate.</p>
     <div id="debug-status" class="status">Loading map...</div>
     <div class="mode-row">
-      <button id="paint-mode" class="active-mode" type="button">Paint Trees</button>
-      <button id="select-mode" class="secondary" type="button">Select Trees</button>
+      <button id="paint-mode" class="active-mode" type="button">Paint Items</button>
+      <button id="select-mode" class="secondary" type="button">Select Items</button>
     </div>
     <div class="toggle-row">
       <span>Auto-save to map</span>
       <label><input id="autosave-toggle" type="checkbox" checked /> Live</label>
     </div>
+    <div id="paint-palette" class="palette">
+      <button data-item-type="tree" class="active-mode" type="button">Tree</button>
+      <button data-item-type="grass" class="secondary" type="button">Grass</button>
+      <button data-item-type="rock1" class="secondary" type="button">Rock 1</button>
+      <button data-item-type="rock2" class="secondary" type="button">Rock 2</button>
+      <button data-item-type="rock3" class="secondary" type="button">Rock 3</button>
+    </div>
     <div class="rotation-row">
       <span>Rotate step</span>
       <input id="rotation-step" type="range" min="5" max="90" step="5" value="15" />
-      <span id="rotation-step-value">15°</span>
+      <span id="rotation-step-value">15 deg</span>
     </div>
     <div class="debug-actions">
       <button id="save-layout" type="button">Save To Map</button>
       <button id="copy-layout" type="button">Copy Code</button>
+      <button id="delete-selected" class="danger" type="button">Delete Selected</button>
       <button id="reset-layout" class="secondary" type="button">Reset Default</button>
       <button id="clear-saved" class="danger" type="button">Clear Saved</button>
     </div>
