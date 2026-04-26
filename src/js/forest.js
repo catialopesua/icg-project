@@ -6,7 +6,7 @@ export const FOREST_TREE_STORAGE_KEY = FOREST_LAYOUT_STORAGE_KEY;
 const FOREST_TREE_LEGACY_STORAGE_KEY = 'tim-birthday-forest-layout-v1';
 const FOREST_BROADCAST_CHANNEL = 'tim-birthday-forest-layout';
 
-export const FOREST_ITEM_TYPES = Object.freeze(['tree', 'grass', 'rock1', 'rock2', 'rock3']);
+export const FOREST_ITEM_TYPES = Object.freeze(['tree', 'grass', 'rock1', 'rock2', 'rock3', 'trafficcone']);
 
 const FOREST_ASSET_DEFS = Object.freeze({
   tree: {
@@ -31,6 +31,10 @@ const FOREST_ASSET_DEFS = Object.freeze({
   rock3: {
     asset: './models/Forest/rock3.glb',
     height: 0.8
+  },
+    trafficcone: {
+    asset: './models/City/streetcone.glb',
+    height: 0.6
   }
 });
 

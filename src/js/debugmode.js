@@ -21,7 +21,8 @@ const PAINT_SPACING = {
   grass: 1.4,
   rock1: 2.0,
   rock2: 2.0,
-  rock3: 1.9
+  rock3: 1.9,
+  trafficcone: 1.2
 };
 
 const TYPE_LABELS = {
@@ -29,7 +30,8 @@ const TYPE_LABELS = {
   grass: 'Grass',
   rock1: 'Rock 1',
   rock2: 'Rock 2',
-  rock3: 'Rock 3'
+  rock3: 'Rock 3',
+  trafficcone: 'Traffic Cone'
 };
 
 const TYPE_COLORS = {
@@ -37,7 +39,8 @@ const TYPE_COLORS = {
   grass: 0x84bc4a,
   rock1: 0x8f8479,
   rock2: 0x7d7268,
-  rock3: 0x999089
+  rock3: 0x999089,
+  trafficcone: 0xff6a00
 };
 
 const container = document.getElementById('canvas-container');
