@@ -272,6 +272,15 @@ function createPlacedItem(parent, baseModel, type, config = {}) {
   placeModelOnGround(item, box);
   item.position.set(Number(config.x) || 0, 0, Number(config.z) || 0);
   item.rotation.y = Number(config.rotationY) || 0;
+  // For small decorative flora/rocks, mark as non-collidable so players can walk through them
+  try {
+    if (type === 'grass' || /^rock/i.test(type)) {
+      item.userData = item.userData || {};
+      item.userData.noCollision = true;
+      item.traverse((n) => { if (n.isMesh) { n.userData = n.userData || {}; n.userData.noCollision = true; } });
+    }
+  } catch (e) {}
+
   parent.add(item);
   return item;
 }

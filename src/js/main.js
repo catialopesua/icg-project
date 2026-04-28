@@ -60,7 +60,8 @@ const sensitivityValue = document.getElementById('sensitivity-value');
 const chatBubbleElement = document.getElementById('chat-bubble');
 const questMainTextElement = document.getElementById('quest-main-text');
 const pauseOverlay = document.getElementById('pause-overlay');
-
+const interactUI = document.getElementById('interact-ui');
+const fadeScreen = document.getElementById('fade-screen');
 // Audio
 const buttonClickAudio = new Audio('./audio/button-click.mp3');
 buttonClickAudio.preload = 'auto';
@@ -74,10 +75,64 @@ const SENSITIVITY_STORAGE_KEY = 'tim-birthday-look-sensitivity';
 
 let lookSensitivity = 1;
 
+
+let canInteract = false;
+
+function checkInteraction(camera, scene) {
+  const trigger = scene.userData.stairTrigger;
+  if (!trigger) return;
+
+  // allow interacting near either the stair base or the stair top
+  const playerPos = camera.position;
+  const distToBase = trigger.position ? playerPos.distanceTo(trigger.position) : Infinity;
+  const distToTop = (trigger.target) ? playerPos.distanceTo(trigger.target) : Infinity;
+  const radius = Number(trigger.radius) || 2.2;
+
+  if (distToBase < radius || distToTop < radius) {
+    if (interactUI) interactUI.style.display = 'block';
+    canInteract = true;
+  } else {
+    if (interactUI) interactUI.style.display = 'none';
+    canInteract = false;
+  }
+}
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyE' && canInteract) {
+    const trigger = scene.userData.stairTrigger;
+    if (!trigger) return;
+
+    if (fadeScreen) fadeScreen.style.opacity = '1';
+
+    // capture player's current position
+    const playerObj = (controls && controls.getObject) ? controls.getObject() : camera;
+    const playerPos = (playerObj && playerObj.position && playerObj.position.clone) ? playerObj.position.clone() : new THREE.Vector3(camera.position.x, camera.position.y, camera.position.z);
+
+    const atTop = Boolean(trigger._isAtTop) || Math.abs(playerPos.y - (trigger.target && trigger.target.y || 0)) < 1.5;
+
+    // wait 1s while screen is dark, then teleport
+    setTimeout(() => {
+      if (!atTop) {
+        // going up: remember where we came from so we can come back down
+        try { trigger._lastGroundPosition = playerPos.clone(); } catch (e) {}
+        trigger._isAtTop = true;
+        const dest = (trigger.target && trigger.target.clone) ? trigger.target.clone() : new THREE.Vector3(trigger.position.x, trigger.position.y + 4, trigger.position.z);
+        const finalY = dest.y + PLAYER_HEIGHT;
+        if (controls && controls.getObject) controls.getObject().position.set(dest.x, finalY, dest.z); else camera.position.set(dest.x, finalY, dest.z);
+      } else {
+        // going down: return to stored ground position (or trigger.position as fallback)
+        const dest = (trigger._lastGroundPosition && trigger._lastGroundPosition.clone) ? trigger._lastGroundPosition.clone() : (trigger.position.clone ? trigger.position.clone() : new THREE.Vector3(trigger.position.x, trigger.position.y, trigger.position.z));
+        trigger._isAtTop = false;
+        if (controls && controls.getObject) controls.getObject().position.set(dest.x, dest.y, dest.z); else camera.position.set(dest.x, dest.y, dest.z);
+      }
+      if (fadeScreen) fadeScreen.style.opacity = '0';
+    }, 1000);
+  }
+});
+
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
-
+  
 function applyMusicVolume(percentage) {
   // Placeholder until background music tracks are added to the project.
   return Math.max(0, Math.min(100, Math.round(Number(percentage) || 0)));
@@ -609,7 +664,7 @@ const updateMovement = pointerLockState.updateMovement;
 
 // Lights (night mode setup - will be adjusted by applyDayNight)
 scene.add(new THREE.AmbientLight(0xffffff, 0.06));
-const DAY_LIGHT_POS = new THREE.Vector3(62, 56, -32);
+const DAY_LIGHT_POS = new THREE.Vector3(15, 56, 37);
 const NIGHT_LIGHT_POS = new THREE.Vector3(-24, 26, -16);
 const SHADOW_TARGET_POS = new THREE.Vector3(2, 0, 14);
 const DAY_SHADOW_BOUNDS = 46;
@@ -783,7 +838,8 @@ function matchesCollisionExclusionByName(obj) {
   }
   const label = names.join(' ');
   if (!label) return false;
-  return /(towel|trashbin|trash_bin|\bbin\b|\broad\b|\blane\b|asphalt)/i.test(label);
+  // exclude small decorative items and common non-blocking assets: grass, rocks, streetlights, lamps
+  return /(towel|trashbin|trash_bin|\bbin\b|\broad\b|\blane\b|asphalt|grass|rock|stone|streetlight|street_light|lamp|lamp-post|lamp_post|pole|bulb|cone|foliage|leaf)/i.test(label);
 }
 
 function shouldCreateCollisionForMesh(obj) {
@@ -1256,6 +1312,7 @@ function animate() {
       }
     }
   } catch (e) { /* ignore */ }
+  try { checkInteraction(camera, scene); } catch (e) { /* ignore */ }
   renderer.render(scene, camera);
 }
 animate();
@@ -2029,8 +2086,9 @@ animate();
       dir.shadow.mapSize.set(4096, 4096);
       dir.shadow.bias = -0.00022;
       dir.shadow.normalBias = 0.014;
-      dir.shadow.radius = 1.2;
-      dir.shadow.blurSamples = 6;
+      // softer, wider sunlight shadows during day
+      dir.shadow.radius = 12;
+      dir.shadow.blurSamples = 16;
       dir.shadow.camera.near = 0.5;
       dir.shadow.camera.far = 110;
       dir.shadow.camera.left = -DAY_SHADOW_BOUNDS;

@@ -342,6 +342,9 @@ export function createCityZone(scene, cx, cz){
     });
 
     lamp.position.set(x, -0.05, z);
+    lamp.userData = lamp.userData || {};
+    // mark streetlight model as non-collidable so players can walk through it
+    lamp.userData.noCollision = true;
     lamp.scale.setScalar(scale);
     lamp.rotation.y = rotationY;
     scene.add(lamp);
@@ -406,6 +409,10 @@ export function createCityZone(scene, cx, cz){
     cone.rotateX(Math.PI);
     cone.renderOrder = 1;
     scene.add(cone);
+
+    // mark visual cone as non-collidable
+    cone.userData = cone.userData || {};
+    cone.userData.noCollision = true;
 
     // register cone and remember original opacity so we can dim its visual cone during daytime
     try {
@@ -487,6 +494,8 @@ export function createCityZone(scene, cx, cz){
       new THREE.MeshStandardMaterial({ color: 0x2f2f2f, roughness: 0.85 })
     );
     pole.position.set(x, 1.15, z);
+    pole.userData = pole.userData || {};
+    pole.userData.noCollision = true;
     pole.castShadow = true;
     scene.add(pole);
 
@@ -495,6 +504,8 @@ export function createCityZone(scene, cx, cz){
       new THREE.MeshStandardMaterial({ color: 0xfff8dd, emissive: 0xffd699, emissiveIntensity: 1.2 })
     );
     bulb.position.set(x, 2.26, z);
+    bulb.userData = bulb.userData || {};
+    bulb.userData.noCollision = true;
     scene.add(bulb);
 
     // Realistic streetlight with warm color and proper decay
@@ -555,6 +566,10 @@ export function createCityZone(scene, cx, cz){
     cone.rotateX(Math.PI);
     cone.renderOrder = 1;
     scene.add(cone);
+
+    // mark visual cone as non-collidable for fallback lights
+    cone.userData = cone.userData || {};
+    cone.userData.noCollision = true;
 
     // register cone for fallback light as well (store original opacity)
     try {
@@ -835,14 +850,22 @@ export function createCityZone(scene, cx, cz){
 
   loader.load('./models/City/building3.glb', (gltf3) => {
     const model3 = gltf3.scene;
+
     for (const p of validPlacements) {
       if (p.model === 3) {
         const y = (typeof p.y === 'number') ? p.y : undefined;
-        const rot = (typeof p.dir === 'string') ? p.dir : (typeof p.rotY === 'number' ? p.rotY : undefined);
+        const rot = (typeof p.dir === 'string') ? p.dir : (typeof p.rotY === 'number') ? p.rotY : 0;
+
+        // colocar building normalmente
         placeBuilding(model3, p.x, y, p.z, rot, BUILDING_MODEL_SCALES[3]);
+
+        // ✅ CRIAR TRIGGER DA ESCADA (posição ajustável)
+        scene.userData.stairTrigger = {
+          position: new THREE.Vector3(p.x + 1.2, 0, p.z + 1.2), // AJUSTAR
+          radius: 2.2,
+          target: new THREE.Vector3(p.x, 8, p.z) // topo do prédio
+        };
       }
     }
-  }, undefined, (err) => {
-    console.warn('Failed to load building3.glb', err);
   });
 }
