@@ -850,21 +850,67 @@ export function createCityZone(scene, cx, cz){
 
   loader.load('./models/City/building3.glb', (gltf3) => {
     const model3 = gltf3.scene;
+    // quick debug: search the loaded model for nodes that look like ladders
+    try {
+      model3.traverse((n) => {
+        if (n && n.name && /ladder|lad/i.test(n.name)) {
+          console.log('Found ladder-like node in building3:', n.name, n);
+        }
+      });
+    } catch (e) {}
 
     for (const p of validPlacements) {
       if (p.model === 3) {
         const y = (typeof p.y === 'number') ? p.y : undefined;
         const rot = (typeof p.dir === 'string') ? p.dir : (typeof p.rotY === 'number') ? p.rotY : 0;
 
-        // colocar building normalmente
+        // place building normally
         placeBuilding(model3, p.x, y, p.z, rot, BUILDING_MODEL_SCALES[3]);
 
-        // ✅ CRIAR TRIGGER DA ESCADA (posição ajustável)
-        scene.userData.stairTrigger = {
-          position: new THREE.Vector3(p.x + 1.2, 0, p.z + 1.2), // AJUSTAR
-          radius: 2.2,
-          target: new THREE.Vector3(p.x, 8, p.z) // topo do prédio
-        };
+        // create stair/ladder trigger and a debug marker so we can visually inspect location
+        const triggerPos = new THREE.Vector3(p.x + 3, 0, p.z + 1.9);
+        const triggerRadius = 2;
+        const targetPos = new THREE.Vector3(p.x + 3, 16, p.z + 1.9);
+
+        scene.userData.stairTrigger = { position: triggerPos, radius: triggerRadius, target: targetPos };
+        console.log('stairTrigger set at', triggerPos, 'radius', triggerRadius, 'target', targetPos);
+
+        // remove previous debug markers if present
+        try {
+          if (scene.userData && scene.userData._stairDebug) {
+            scene.remove(scene.userData._stairDebug);
+            scene.userData._stairDebug = null;
+          }
+        } catch (e) {}
+
+        const debugGroup = new THREE.Group();
+        debugGroup.name = 'stair-debug-group';
+        debugGroup.userData = debugGroup.userData || {};
+        debugGroup.userData.noCollision = true;
+
+        // red ring on ground showing trigger radius
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(Math.max(0.06, triggerRadius * 0.6), Math.max(0.08, triggerRadius), 48),
+          new THREE.MeshBasicMaterial({ color: 0xff3333, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(triggerPos.x, 0.02, triggerPos.z);
+        ring.userData = ring.userData || {};
+        ring.userData.noCollision = true;
+        debugGroup.add(ring);
+
+        // small red sphere at the target/top location
+        const topSphere = new THREE.Mesh(
+          new THREE.SphereGeometry(0.22, 12, 10),
+          new THREE.MeshBasicMaterial({ color: 0xff3333 })
+        );
+        topSphere.position.set(targetPos.x, targetPos.y + 0.22, targetPos.z);
+        topSphere.userData = topSphere.userData || {};
+        topSphere.userData.noCollision = true;
+        debugGroup.add(topSphere);
+
+        scene.add(debugGroup);
+        scene.userData._stairDebug = debugGroup;
       }
     }
   });
