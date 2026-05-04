@@ -8,10 +8,8 @@ import { createForestZone } from './forest.js';
 import {
   FRIEND_DEFS,
   loadFriendPlacements,
-  loadFriendUnlocks,
   loadPlayerStart,
-  loadTimPlacement,
-  saveFriendUnlocks
+  loadTimPlacement
 } from './friends.js';
 
 // Scene & renderer
@@ -84,7 +82,6 @@ chatContinueAudio.preload = 'auto';
 const MUSIC_VOLUME_STORAGE_KEY = 'tim-birthday-music-volume';
 const SFX_VOLUME_STORAGE_KEY = 'tim-birthday-sfx-volume';
 const SENSITIVITY_STORAGE_KEY = 'tim-birthday-look-sensitivity';
-const GAME_PROGRESS_STORAGE_KEY = 'tim-birthday-game-progress-v1';
 
 let lookSensitivity = 1;
 let gameReady = false;
@@ -216,29 +213,6 @@ function savePercentage(storageKey, percentage) {
   }
 }
 
-function loadGameProgress() {
-  try {
-    const raw = window.localStorage.getItem(GAME_PROGRESS_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch (e) {
-    return {};
-  }
-}
-
-function saveGameProgress(progress) {
-  try {
-    const current = loadGameProgress();
-    window.localStorage.setItem(GAME_PROGRESS_STORAGE_KEY, JSON.stringify({
-      ...current,
-      ...progress
-    }));
-  } catch (e) {
-    // Ignore persistence failures.
-  }
-}
-
 const QUEST_FIND_BIRTHDAY_BOY = 'Find the Birthday Boy';
 const QUEST_FIND_FRIENDS = "Find Tim's friends";
 
@@ -247,13 +221,12 @@ const timDialogueLines = [
   "I'm inviting five friends to my birthday party! Find them all and then meet me here in the park!"
 ];
 
-let unlockedFriendIds = loadFriendUnlocks();
-const savedGameProgress = loadGameProgress();
+let unlockedFriendIds = new Set();
 let currentQuest = '';
 let initialQuestSoundPlayed = false;
 let activeDialogue = null;
 let activeDialogueIndex = -1;
-let timDialogueCompleted = Boolean(savedGameProgress.timDialogueCompleted || unlockedFriendIds.size > 0);
+let timDialogueCompleted = false;
 
 function playButtonClickSound() {
   try {
@@ -377,7 +350,6 @@ function unlockFriend(friendId) {
   const beforeUnlockedWeathers = computeUnlockedWeatherIds();
 
   unlockedFriendIds.add(id);
-  unlockedFriendIds = saveFriendUnlocks(unlockedFriendIds);
 
   const stateIndex = friendsState.findIndex((f) => f.id === id);
   if (stateIndex >= 0) {
@@ -404,7 +376,6 @@ function unlockFriend(friendId) {
 
 function setTimDialogueCompleted(completed) {
   timDialogueCompleted = Boolean(completed);
-  saveGameProgress({ timDialogueCompleted });
   updateFriendVisibility();
 }
 
