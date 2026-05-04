@@ -33,6 +33,8 @@
         </section>
     </div>
 
+    <div id="weather-unlock-toast" class="unlock-toast hidden" role="status" aria-live="polite"></div>
+
     <div id="tool-dock" aria-label="Game controls">
         <div class="tool-item">
             <button id="weather-toggle" class="tool-btn weather" type="button" aria-expanded="false" aria-controls="weather-panel" aria-label="Weather (C)"><span class="material-symbols-rounded tool-icon" aria-hidden="true">cloud</span></button>
@@ -58,8 +60,8 @@
                 <h2>🌤 Weather Control</h2>
                 <button class="panel-close" type="button" data-close-panel="weather-panel" aria-label="Close weather panel">✕</button>
             </div>
-            <p class="panel-badge">Unlocked 7 of 7 weather effects</p>
-            <p class="panel-note">All weather effects are unlocked for testing. Pick any weather and explore the world.</p>
+            <p id="weather-unlocked-count" class="panel-badge">Unlocked 2 of 7 weather effects</p>
+            <p class="panel-note">Talk to Tim's friends to unlock more weather effects.</p>
             <div class="weather-options">
                 <button class="weather-option active" type="button" data-weather="sunny">
                     <span class="option-icon">☀️</span>
@@ -229,7 +231,11 @@
         <div id="instructions" role="dialog" aria-modal="true" aria-labelledby="start-title">
             <div class="party-confetti" aria-hidden="true"></div>
 
-            <div id="intro-screen" class="instructions-view">
+            <div id="loading-screen" class="instructions-view">
+                <p class="loading-line">loading...</p>
+            </div>
+
+            <div id="intro-screen" class="instructions-view hidden">
                 <h1 id="start-title"><span>Tim's Birthday</span><span>Scavenger Hunt</span></h1>
                 <p class="welcome-line">Click anywhere to play</p>
                 <p class="title-credit">ICG - 2026</p>

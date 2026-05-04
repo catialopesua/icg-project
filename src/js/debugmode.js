@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createGardenZone } from './garden.js';
 import { createCityZone } from './city.js';
 import { createBeachZone } from './beach.js';
@@ -12,6 +13,21 @@ import {
   loadForestLayout,
   saveForestLayout
 } from './forest.js';
+import {
+  FRIEND_DEFS,
+  clearFriendPlacements,
+  clearPlayerStart,
+  clearTimPlacement,
+  getDefaultFriendPlacements,
+  getDefaultPlayerStart,
+  getDefaultTimPlacement,
+  loadFriendPlacements,
+  loadPlayerStart,
+  loadTimPlacement,
+  saveFriendPlacements,
+  savePlayerStart,
+  saveTimPlacement
+} from './friends.js';
 
 const PARK_CENTER_X = -18;
 const PARK_CENTER_Z = 12;
@@ -43,6 +59,17 @@ const TYPE_COLORS = {
   trafficcone: 0xff6a00
 };
 
+const FRIEND_SELECT_RADIUS = 3.2;
+const FRIEND_COLORS = {
+  friend1: 0x4f8cff,
+  friend2: 0xff4fbd,
+  friend3: 0xffa44f,
+  friend4: 0x86e3ff,
+  friend5: 0xa64fff
+};
+const TIM_COLOR = 0xffd34f;
+const SPAWN_COLOR = 0x40b868;
+
 const container = document.getElementById('canvas-container');
 const statusEl = document.getElementById('debug-status');
 const outputEl = document.getElementById('layout-output');
@@ -53,10 +80,23 @@ const resetButton = document.getElementById('reset-layout');
 const clearSavedButton = document.getElementById('clear-saved');
 const rotationStepInput = document.getElementById('rotation-step');
 const rotationStepValue = document.getElementById('rotation-step-value');
+const editForestButton = document.getElementById('edit-forest');
+const editFriendsButton = document.getElementById('edit-friends');
+const editTimButton = document.getElementById('edit-tim');
+const editSpawnButton = document.getElementById('edit-spawn');
 const paintModeButton = document.getElementById('paint-mode');
 const selectModeButton = document.getElementById('select-mode');
 const autosaveToggle = document.getElementById('autosave-toggle');
+const paintPaletteElement = document.getElementById('paint-palette');
+const friendPaletteElement = document.getElementById('friend-palette');
 const paletteButtons = Array.from(document.querySelectorAll('[data-item-type]'));
+const friendPaletteButtons = Array.from(document.querySelectorAll('[data-friend-id]'));
+const placementEditorElement = document.getElementById('placement-editor');
+const placementTitleElement = document.getElementById('placement-title');
+const placementXInput = document.getElementById('placement-x');
+const placementYInput = document.getElementById('placement-y');
+const placementZInput = document.getElementById('placement-z');
+const placementRotationInput = document.getElementById('placement-rotation');
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xdce9d9);
@@ -164,13 +204,22 @@ const parkOutlinePoints = [
 ];
 scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(parkOutlinePoints), parkOutlineMat));
 
+let editTarget = 'forest';
+
 let layout = loadForestLayout();
+let friendLayout = loadFriendPlacements();
+let timPlacement = loadTimPlacement();
+let playerStart = loadPlayerStart();
+
 let selectedIndex = -1;
+let selectedFriendIndex = -1;
 let editorMode = 'paint';
 let paintType = 'tree';
+let paintFriendId = FRIEND_DEFS[0] ? FRIEND_DEFS[0].id : 'friend1';
 let isPainting = false;
 let lastPaintPoint = null;
 let pointerDown = null;
+let syncingPlacementInputs = false;
 
 const forestController = createForestZone(scene, PARK_CENTER_X, PARK_CENTER_Z, {
   layout,
@@ -180,6 +229,116 @@ const forestController = createForestZone(scene, PARK_CENTER_X, PARK_CENTER_Z, {
 const markerGroup = new THREE.Group();
 markerGroup.name = 'forest-editor-markers';
 scene.add(markerGroup);
+
+const friendModelsById = new Map();
+const friendLoader = new GLTFLoader();
+let timModel = null;
+
+function enableShadows(model) {
+  model.traverse((node) => {
+    if (node.isMesh) {
+      node.castShadow = true;
+      node.receiveShadow = true;
+    }
+  });
+}
+
+function scaleModelToHeight(model, desiredHeight) {
+  const box = new THREE.Box3().setFromObject(model);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const height = size.y || 1;
+  const scale = desiredHeight / height;
+  model.scale.setScalar(scale);
+  return box;
+}
+
+function placeModelOnGround(model, box) {
+  box.setFromObject(model);
+  model.position.y -= box.min.y;
+}
+
+function smoothModelShading(model) {
+  model.traverse((node) => {
+    if (!node.isMesh) return;
+    try {
+      if (node.geometry && node.geometry.isBufferGeometry) node.geometry.computeVertexNormals();
+      if (!node.material) return;
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      materials.forEach((material) => {
+        material.flatShading = false;
+        material.needsUpdate = true;
+      });
+    } catch (e) {
+      // ignore
+    }
+  });
+}
+
+function applyFriendPlacementToModel(friendId) {
+  const model = friendModelsById.get(friendId);
+  const placement = friendLayout.find((p) => p && p.id === friendId);
+  if (!model || !placement) return;
+
+  const baseY = Number.isFinite(model.userData.groundY) ? model.userData.groundY : 0;
+  model.position.set(placement.x, baseY + (Number(placement.y) || 0), placement.z);
+  model.rotation.y = placement.rotationY || 0;
+}
+
+function applyFriendPlacementsToModels() {
+  FRIEND_DEFS.forEach((def) => applyFriendPlacementToModel(def.id));
+}
+
+function applyTimPlacementToModel() {
+  if (!timModel || !timPlacement) return;
+  const baseY = Number.isFinite(timModel.userData.groundY) ? timModel.userData.groundY : 0;
+  timModel.position.set(
+    Number(timPlacement.x) || 0,
+    baseY + (Number(timPlacement.y) || 0),
+    Number(timPlacement.z) || 0
+  );
+  timModel.rotation.y = Number(timPlacement.rotationY) || 0;
+}
+
+function loadFriendModels() {
+  FRIEND_DEFS.forEach((def) => {
+    friendLoader.load(`./models/Friends/${def.fileName}`, (gltf) => {
+      const friend = gltf.scene;
+      friend.name = def.id;
+      friend.userData.friendId = def.id;
+      enableShadows(friend);
+      const box = scaleModelToHeight(friend, def.desiredHeight);
+      placeModelOnGround(friend, box);
+      friend.userData.groundY = friend.position.y;
+      smoothModelShading(friend);
+      friendModelsById.set(def.id, friend);
+      scene.add(friend);
+      applyFriendPlacementToModel(def.id);
+    }, undefined, (err) => {
+      console.warn(`Failed to load ${def.fileName}`, err);
+    });
+  });
+}
+
+function loadTimModel() {
+  friendLoader.load('./models/Friends/birthday_boy.glb', (gltf) => {
+    timModel = gltf.scene;
+    timModel.name = 'tim';
+    timModel.userData.tim = true;
+    enableShadows(timModel);
+    const box = scaleModelToHeight(timModel, 1.2);
+    placeModelOnGround(timModel, box);
+    timModel.userData.groundY = timModel.position.y;
+    smoothModelShading(timModel);
+    scene.add(timModel);
+    applyTimPlacementToModel();
+  }, undefined, (err) => {
+    console.warn('Failed to load birthday_boy.glb', err);
+  });
+}
+
+loadFriendModels();
+loadTimModel();
 
 function cloneDefaultLayout() {
   return DEFAULT_FOREST_LAYOUT.map((item) => ({ ...item }));
@@ -204,6 +363,37 @@ function updatePaletteButtons() {
   });
 }
 
+function updateFriendPaletteButtons() {
+  friendPaletteButtons.forEach((button) => {
+    const active = button.dataset.friendId === paintFriendId;
+    button.classList.toggle('active-mode', active);
+    button.classList.toggle('secondary', !active);
+  });
+}
+
+function updateTargetButtons() {
+  if (editForestButton) {
+    editForestButton.classList.toggle('active-mode', editTarget === 'forest');
+    editForestButton.classList.toggle('secondary', editTarget !== 'forest');
+  }
+  if (editFriendsButton) {
+    editFriendsButton.classList.toggle('active-mode', editTarget === 'friends');
+    editFriendsButton.classList.toggle('secondary', editTarget !== 'friends');
+  }
+  if (editTimButton) {
+    editTimButton.classList.toggle('active-mode', editTarget === 'tim');
+    editTimButton.classList.toggle('secondary', editTarget !== 'tim');
+  }
+  if (editSpawnButton) {
+    editSpawnButton.classList.toggle('active-mode', editTarget === 'spawn');
+    editSpawnButton.classList.toggle('secondary', editTarget !== 'spawn');
+  }
+
+  if (paintPaletteElement) paintPaletteElement.classList.toggle('hidden', editTarget !== 'forest');
+  if (friendPaletteElement) friendPaletteElement.classList.toggle('hidden', editTarget !== 'friends');
+  if (placementEditorElement) placementEditorElement.classList.toggle('hidden', editTarget === 'forest');
+}
+
 function worldFromLayout(item) {
   return {
     x: PARK_CENTER_X + item.dx,
@@ -212,20 +402,224 @@ function worldFromLayout(item) {
 }
 
 function updateOutput() {
-  outputEl.value = layoutToCode(layout);
+  if (editTarget === 'friends') {
+    outputEl.value = friendLayoutToCode(friendLayout);
+  } else if (editTarget === 'tim') {
+    outputEl.value = worldPlacementToCode('TIM_PLACEMENT', timPlacement);
+  } else if (editTarget === 'spawn') {
+    outputEl.value = worldPlacementToCode('PLAYER_START', playerStart);
+  } else {
+    outputEl.value = layoutToCode(layout);
+  }
+}
+
+function friendLayoutToCode(currentLayout) {
+  const safeLayout = Array.isArray(currentLayout) ? currentLayout : [];
+  return `const FRIEND_PLACEMENTS = ${JSON.stringify(safeLayout, null, 2)};`;
+}
+
+function worldPlacementToCode(name, placement) {
+  return `const ${name} = ${JSON.stringify(placement || {}, null, 2)};`;
 }
 
 function persistIfAutosave() {
   if (!autosaveToggle.checked) return;
-  layout = saveForestLayout(layout);
+  if (editTarget === 'friends') {
+    friendLayout = saveFriendPlacements(friendLayout);
+    applyFriendPlacementsToModels();
+  } else if (editTarget === 'tim') {
+    timPlacement = saveTimPlacement(timPlacement);
+    applyTimPlacementToModel();
+  } else if (editTarget === 'spawn') {
+    playerStart = savePlayerStart(playerStart);
+  } else {
+    layout = saveForestLayout(layout);
+  }
 }
 
 function setStatus(message) {
   statusEl.textContent = message;
 }
 
+function formatInputNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? String(Number(parsed.toFixed(2))) : '0';
+}
+
+function getEditableFriendIndex() {
+  if (selectedFriendIndex >= 0 && friendLayout[selectedFriendIndex]) return selectedFriendIndex;
+  const paintIndex = friendLayout.findIndex((p) => p && p.id === paintFriendId);
+  return paintIndex >= 0 ? paintIndex : -1;
+}
+
+function getActivePlacementInfo() {
+  if (editTarget === 'friends') {
+    const index = getEditableFriendIndex();
+    const placement = index >= 0 ? friendLayout[index] : null;
+    const def = placement ? FRIEND_DEFS.find((d) => d.id === placement.id) : null;
+    return {
+      placement,
+      label: def ? `${def.name} placement` : 'Friend placement'
+    };
+  }
+
+  if (editTarget === 'tim') {
+    return { placement: timPlacement, label: 'Tim placement' };
+  }
+
+  if (editTarget === 'spawn') {
+    return { placement: playerStart, label: 'First spawn placement' };
+  }
+
+  return { placement: null, label: 'Placement' };
+}
+
+function syncPlacementInputs() {
+  if (!placementEditorElement || editTarget === 'forest') return;
+  const { placement, label } = getActivePlacementInfo();
+  if (!placement) return;
+
+  syncingPlacementInputs = true;
+  if (placementTitleElement) placementTitleElement.textContent = label;
+  if (placementXInput) placementXInput.value = formatInputNumber(placement.x);
+  if (placementYInput) placementYInput.value = formatInputNumber(placement.y);
+  if (placementZInput) placementZInput.value = formatInputNumber(placement.z);
+  if (placementRotationInput) {
+    const degrees = THREE.MathUtils.radToDeg(Number(placement.rotationY) || 0);
+    placementRotationInput.value = formatInputNumber(degrees);
+  }
+  syncingPlacementInputs = false;
+}
+
+function readPlacementInputs(fallback) {
+  const rotationDegrees = Number(placementRotationInput && placementRotationInput.value);
+  return {
+    x: Number.isFinite(Number(placementXInput && placementXInput.value)) ? Number(placementXInput.value) : Number(fallback.x) || 0,
+    y: Number.isFinite(Number(placementYInput && placementYInput.value)) ? Number(placementYInput.value) : Number(fallback.y) || 0,
+    z: Number.isFinite(Number(placementZInput && placementZInput.value)) ? Number(placementZInput.value) : Number(fallback.z) || 0,
+    rotationY: Number.isFinite(rotationDegrees) ? THREE.MathUtils.degToRad(rotationDegrees) : Number(fallback.rotationY) || 0
+  };
+}
+
+function applyPlacementInputValues() {
+  if (syncingPlacementInputs || editTarget === 'forest') return;
+  const { placement } = getActivePlacementInfo();
+  if (!placement) return;
+
+  const next = readPlacementInputs(placement);
+  next.x = Number(next.x.toFixed(1));
+  next.y = Number(next.y.toFixed(1));
+  next.z = Number(next.z.toFixed(1));
+  next.rotationY = Number(next.rotationY.toFixed(4));
+
+  if (editTarget === 'friends') {
+    const index = getEditableFriendIndex();
+    if (index < 0 || !friendLayout[index]) return;
+    friendLayout[index] = { ...friendLayout[index], ...next };
+    selectedFriendIndex = index;
+  } else if (editTarget === 'tim') {
+    timPlacement = { ...timPlacement, ...next };
+  } else if (editTarget === 'spawn') {
+    playerStart = { ...playerStart, ...next };
+  }
+
+  syncEditor();
+}
+
 function refreshMarkers() {
   markerGroup.clear();
+
+  function addPlacementMarker(x, y, z, color, rotationY = null) {
+    const markerY = Number(y) || 0;
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.9, 1.25, 28),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide
+      })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(x, markerY + 0.12, z);
+    markerGroup.add(ring);
+
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.1, 0.1, 1.4, 10),
+      new THREE.MeshBasicMaterial({ color })
+    );
+    pole.position.set(x, markerY + 0.75, z);
+    markerGroup.add(pole);
+
+    if (rotationY !== null) {
+      const direction = new THREE.Vector3(0, 0, -1)
+        .applyAxisAngle(new THREE.Vector3(0, 1, 0), Number(rotationY) || 0)
+        .normalize();
+      const arrow = new THREE.ArrowHelper(
+        direction,
+        new THREE.Vector3(x, markerY + 1.65, z),
+        2.4,
+        color,
+        0.55,
+        0.34
+      );
+      markerGroup.add(arrow);
+    }
+  }
+
+  if (editTarget === 'tim') {
+    addPlacementMarker(
+      Number(timPlacement.x) || 0,
+      Number(timPlacement.y) || 0,
+      Number(timPlacement.z) || 0,
+      TIM_COLOR,
+      Number(timPlacement.rotationY) || 0
+    );
+    return;
+  }
+
+  if (editTarget === 'spawn') {
+    addPlacementMarker(
+      Number(playerStart.x) || 0,
+      Number(playerStart.y) || 0,
+      Number(playerStart.z) || 0,
+      SPAWN_COLOR,
+      Number(playerStart.rotationY) || 0
+    );
+    return;
+  }
+
+  if (editTarget === 'friends') {
+    friendLayout.forEach((placement, index) => {
+      if (!placement) return;
+      const x = placement.x;
+      const y = Number(placement.y) || 0;
+      const z = placement.z;
+      const color = FRIEND_COLORS[placement.id] || 0x2e7a38;
+      const selected = index === selectedFriendIndex;
+
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(selected ? 1.05 : 0.8, selected ? 1.4 : 1.12, 28),
+        new THREE.MeshBasicMaterial({
+          color: selected ? 0xffc247 : color,
+          transparent: true,
+          opacity: selected ? 0.95 : 0.78,
+          side: THREE.DoubleSide
+        })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(x, y + 0.12, z);
+      markerGroup.add(ring);
+
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(selected ? 0.13 : 0.09, selected ? 0.13 : 0.09, selected ? 1.6 : 1.15, 10),
+        new THREE.MeshBasicMaterial({ color: selected ? 0xffc247 : color })
+      );
+      pole.position.set(x, y + (selected ? 0.85 : 0.65), z);
+      markerGroup.add(pole);
+    });
+    return;
+  }
 
   layout.forEach((item, index) => {
     const { x, z } = worldFromLayout(item);
@@ -275,6 +669,70 @@ function syncForest(statusOverride = '') {
   }
 }
 
+function syncFriends(statusOverride = '') {
+  persistIfAutosave();
+  applyFriendPlacementsToModels();
+  updateOutput();
+  refreshMarkers();
+  syncPlacementInputs();
+
+  if (statusOverride) {
+    setStatus(statusOverride);
+    return;
+  }
+
+  if (selectedFriendIndex >= 0 && friendLayout[selectedFriendIndex]) {
+    const placement = friendLayout[selectedFriendIndex];
+    const def = FRIEND_DEFS.find((d) => d.id === placement.id);
+    const label = def ? def.name : placement.id;
+    setStatus(`Select mode. ${label} at x ${placement.x.toFixed(1)}, y ${Number(placement.y || 0).toFixed(1)}, z ${placement.z.toFixed(1)}, rot ${Number(placement.rotationY || 0).toFixed(2)}.`);
+  } else if (editorMode === 'paint') {
+    const def = FRIEND_DEFS.find((d) => d.id === paintFriendId);
+    const label = def ? def.name : paintFriendId;
+    const placement = friendLayout.find((p) => p && p.id === paintFriendId);
+    const y = placement ? Number(placement.y || 0).toFixed(1) : '0.0';
+    setStatus(`Paint mode. Drag to position ${label}. Use the Y field for height (${y}).`);
+  } else {
+    setStatus('Select mode. Click near a friend to select it, then click elsewhere to move it.');
+  }
+}
+
+function syncTim(statusOverride = '') {
+  persistIfAutosave();
+  applyTimPlacementToModel();
+  updateOutput();
+  refreshMarkers();
+  syncPlacementInputs();
+
+  if (statusOverride) {
+    setStatus(statusOverride);
+    return;
+  }
+
+  setStatus(`Tim at x ${Number(timPlacement.x || 0).toFixed(1)}, y ${Number(timPlacement.y || 0).toFixed(1)}, z ${Number(timPlacement.z || 0).toFixed(1)}. Click the map to move him.`);
+}
+
+function syncSpawn(statusOverride = '') {
+  persistIfAutosave();
+  updateOutput();
+  refreshMarkers();
+  syncPlacementInputs();
+
+  if (statusOverride) {
+    setStatus(statusOverride);
+    return;
+  }
+
+  setStatus(`First spawn at x ${Number(playerStart.x || 0).toFixed(1)}, y ${Number(playerStart.y || 0).toFixed(1)}, z ${Number(playerStart.z || 0).toFixed(1)}. Click the map to move it.`);
+}
+
+function syncEditor(statusOverride = '') {
+  if (editTarget === 'friends') syncFriends(statusOverride);
+  else if (editTarget === 'tim') syncTim(statusOverride);
+  else if (editTarget === 'spawn') syncSpawn(statusOverride);
+  else syncForest(statusOverride);
+}
+
 function findNearestItemIndex(worldX, worldZ) {
   let nearestIndex = -1;
   let nearestDistSq = Infinity;
@@ -312,7 +770,7 @@ function addItemAt(type, worldX, worldZ) {
   });
 
   selectedIndex = editorMode === 'select' ? layout.length - 1 : -1;
-  syncForest();
+  syncEditor();
   return true;
 }
 
@@ -323,7 +781,7 @@ function moveSelectedItem(worldX, worldZ) {
     dx: Number((worldX - PARK_CENTER_X).toFixed(1)),
     dz: Number((worldZ - PARK_CENTER_Z).toFixed(1))
   };
-  syncForest();
+  syncEditor();
 }
 
 function removeItemAt(index) {
@@ -331,7 +789,7 @@ function removeItemAt(index) {
   layout.splice(index, 1);
   if (selectedIndex === index) selectedIndex = -1;
   else if (selectedIndex > index) selectedIndex -= 1;
-  syncForest('Item removed.');
+  syncEditor('Item removed.');
 }
 
 function rotateSelectedItem() {
@@ -341,20 +799,150 @@ function rotateSelectedItem() {
     ...layout[selectedIndex],
     rotationY: Number((layout[selectedIndex].rotationY + rotationStep).toFixed(4))
   };
-  syncForest();
+  syncEditor();
 }
 
 function setEditorMode(mode) {
   editorMode = mode === 'select' ? 'select' : 'paint';
-  if (editorMode === 'paint') selectedIndex = -1;
+  if (editorMode === 'paint') {
+    if (editTarget === 'friends') selectedFriendIndex = -1;
+    else selectedIndex = -1;
+  }
   updateModeButtons();
-  syncForest();
+  syncEditor();
 }
 
 function setPaintType(type) {
   paintType = FOREST_ITEM_TYPES.includes(type) ? type : 'tree';
   updatePaletteButtons();
-  syncForest();
+  syncEditor();
+}
+
+function setPaintFriendId(friendId) {
+  const id = String(friendId || '');
+  if (!FRIEND_DEFS.some((def) => def.id === id)) return;
+  paintFriendId = id;
+  updateFriendPaletteButtons();
+  syncEditor();
+}
+
+function setEditTarget(target) {
+  if (target === 'friends' || target === 'tim' || target === 'spawn') editTarget = target;
+  else editTarget = 'forest';
+  isPainting = false;
+  lastPaintPoint = null;
+  pointerDown = null;
+  updateTargetButtons();
+  syncEditor();
+}
+
+function findNearestFriendIndex(worldX, worldZ) {
+  let nearestIndex = -1;
+  let nearestDistSq = Infinity;
+
+  friendLayout.forEach((placement, index) => {
+    if (!placement) return;
+    const dx = worldX - placement.x;
+    const dz = worldZ - placement.z;
+    const distSq = dx * dx + dz * dz;
+    const radiusSq = FRIEND_SELECT_RADIUS * FRIEND_SELECT_RADIUS;
+    if (distSq <= radiusSq && distSq < nearestDistSq) {
+      nearestDistSq = distSq;
+      nearestIndex = index;
+    }
+  });
+
+  return nearestIndex;
+}
+
+function setFriendAtIndex(index, worldX, worldZ) {
+  if (index < 0 || index >= friendLayout.length || !friendLayout[index]) return;
+  friendLayout[index] = {
+    ...friendLayout[index],
+    x: Number(worldX.toFixed(1)),
+    z: Number(worldZ.toFixed(1))
+  };
+  syncEditor();
+}
+
+function setFriendById(friendId, worldX, worldZ) {
+  const index = friendLayout.findIndex((p) => p && p.id === friendId);
+  if (index < 0) return;
+  setFriendAtIndex(index, worldX, worldZ);
+}
+
+function moveSelectedFriend(worldX, worldZ) {
+  if (selectedFriendIndex < 0) return;
+  setFriendAtIndex(selectedFriendIndex, worldX, worldZ);
+}
+
+function resetFriendAtIndex(index) {
+  if (index < 0 || index >= friendLayout.length || !friendLayout[index]) return;
+  const defaults = getDefaultFriendPlacements();
+  const id = friendLayout[index].id;
+  const fallback = defaults.find((p) => p.id === id);
+  if (!fallback) return;
+  friendLayout[index] = { ...fallback };
+  syncEditor('Friend reset to default placement.');
+}
+
+function rotateSelectedFriend() {
+  if (selectedFriendIndex < 0 || !friendLayout[selectedFriendIndex]) return;
+  const rotationStep = THREE.MathUtils.degToRad(Number(rotationStepInput.value) || 15);
+  friendLayout[selectedFriendIndex] = {
+    ...friendLayout[selectedFriendIndex],
+    rotationY: Number(((friendLayout[selectedFriendIndex].rotationY || 0) + rotationStep).toFixed(4))
+  };
+  syncEditor();
+}
+
+function setTimAt(worldX, worldZ) {
+  timPlacement = {
+    ...timPlacement,
+    x: Number(worldX.toFixed(1)),
+    z: Number(worldZ.toFixed(1))
+  };
+  syncEditor();
+}
+
+function setPlayerStartAt(worldX, worldZ) {
+  playerStart = {
+    ...playerStart,
+    x: Number(worldX.toFixed(1)),
+    z: Number(worldZ.toFixed(1))
+  };
+  syncEditor();
+}
+
+function rotateTim() {
+  const rotationStep = THREE.MathUtils.degToRad(Number(rotationStepInput.value) || 15);
+  timPlacement = {
+    ...timPlacement,
+    rotationY: Number(((timPlacement.rotationY || 0) + rotationStep).toFixed(4))
+  };
+  syncEditor();
+}
+
+function rotatePlayerStart() {
+  const rotationStep = THREE.MathUtils.degToRad(Number(rotationStepInput.value) || 15);
+  playerStart = {
+    ...playerStart,
+    rotationY: Number(((playerStart.rotationY || 0) + rotationStep).toFixed(4))
+  };
+  syncEditor();
+}
+
+function maybePaintFriend(point) {
+  if (!point) return;
+  const index = friendLayout.findIndex((p) => p && p.id === paintFriendId);
+  if (index >= 0) selectedFriendIndex = index;
+  setFriendById(paintFriendId, point.x, point.z);
+}
+
+function maybePaintSingletonPlacement(point) {
+  if (!point) return;
+  if (editTarget === 'tim') setTimAt(point.x, point.z);
+  else if (editTarget === 'spawn') setPlayerStartAt(point.x, point.z);
 }
 
 const raycaster = new THREE.Raycaster();
@@ -386,12 +974,26 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   if (editorMode !== 'paint' || event.button !== 0) return;
   isPainting = true;
   lastPaintPoint = null;
-  maybePaintItem(intersectGround(event));
+  const point = intersectGround(event);
+  if (editTarget === 'friends') {
+    maybePaintFriend(point);
+  } else if (editTarget === 'tim' || editTarget === 'spawn') {
+    maybePaintSingletonPlacement(point);
+  } else {
+    maybePaintItem(point);
+  }
 });
 
 renderer.domElement.addEventListener('pointermove', (event) => {
   if (!isPainting || editorMode !== 'paint') return;
-  maybePaintItem(intersectGround(event));
+  const point = intersectGround(event);
+  if (editTarget === 'friends') {
+    maybePaintFriend(point);
+  } else if (editTarget === 'tim' || editTarget === 'spawn') {
+    maybePaintSingletonPlacement(point);
+  } else {
+    maybePaintItem(point);
+  }
 });
 
 renderer.domElement.addEventListener('pointerup', (event) => {
@@ -399,7 +1001,7 @@ renderer.domElement.addEventListener('pointerup', (event) => {
     isPainting = false;
     lastPaintPoint = null;
     pointerDown = null;
-    syncForest();
+    syncEditor();
     return;
   }
 
@@ -411,6 +1013,34 @@ renderer.domElement.addEventListener('pointerup', (event) => {
   const point = intersectGround(event);
   if (!point) return;
 
+  if (editTarget === 'tim' || editTarget === 'spawn') {
+    maybePaintSingletonPlacement(point);
+    return;
+  }
+
+  if (editTarget === 'friends') {
+    const nearestFriendIndex = findNearestFriendIndex(point.x, point.z);
+
+    if (event.shiftKey) {
+      if (nearestFriendIndex >= 0) resetFriendAtIndex(nearestFriendIndex);
+      return;
+    }
+
+    if (nearestFriendIndex >= 0) {
+      selectedFriendIndex = nearestFriendIndex;
+      syncEditor();
+      return;
+    }
+
+    if (selectedFriendIndex >= 0) {
+      moveSelectedFriend(point.x, point.z);
+      return;
+    }
+
+    setStatus('Select a friend first, then click elsewhere to move it.');
+    return;
+  }
+
   const nearestIndex = findNearestItemIndex(point.x, point.z);
 
   if (event.shiftKey) {
@@ -420,7 +1050,7 @@ renderer.domElement.addEventListener('pointerup', (event) => {
 
   if (nearestIndex >= 0) {
     selectedIndex = nearestIndex;
-    syncForest();
+    syncEditor();
     return;
   }
 
@@ -440,10 +1070,14 @@ renderer.domElement.addEventListener('pointerleave', () => {
 
 window.addEventListener('keydown', (event) => {
   if (event.code === 'KeyR') {
-    rotateSelectedItem();
+    if (editTarget === 'friends') rotateSelectedFriend();
+    else if (editTarget === 'tim') rotateTim();
+    else if (editTarget === 'spawn') rotatePlayerStart();
+    else rotateSelectedItem();
   } else if (event.code === 'Escape') {
-    selectedIndex = -1;
-    syncForest();
+    if (editTarget === 'friends') selectedFriendIndex = -1;
+    else selectedIndex = -1;
+    syncEditor();
   } else if (event.code === 'KeyP') {
     setEditorMode('paint');
   } else if (event.code === 'KeyM') {
@@ -452,22 +1086,69 @@ window.addEventListener('keydown', (event) => {
 });
 
 rotationStepInput.addEventListener('input', updateRotationLabel);
+if (editForestButton) editForestButton.addEventListener('click', () => setEditTarget('forest'));
+if (editFriendsButton) editFriendsButton.addEventListener('click', () => setEditTarget('friends'));
+if (editTimButton) editTimButton.addEventListener('click', () => setEditTarget('tim'));
+if (editSpawnButton) editSpawnButton.addEventListener('click', () => setEditTarget('spawn'));
 paintModeButton.addEventListener('click', () => setEditorMode('paint'));
 selectModeButton.addEventListener('click', () => setEditorMode('select'));
 paletteButtons.forEach((button) => {
   button.addEventListener('click', () => setPaintType(button.dataset.itemType || 'tree'));
 });
+friendPaletteButtons.forEach((button) => {
+  button.addEventListener('click', () => setPaintFriendId(button.dataset.friendId || 'friend1'));
+});
+[placementXInput, placementYInput, placementZInput, placementRotationInput].forEach((input) => {
+  if (!input) return;
+  input.addEventListener('input', applyPlacementInputValues);
+});
 
 autosaveToggle.addEventListener('change', () => {
   if (autosaveToggle.checked) {
-    layout = saveForestLayout(layout);
-    setStatus('Auto-save is on. New edits will update the map live.');
+    if (editTarget === 'friends') {
+      friendLayout = saveFriendPlacements(friendLayout);
+      applyFriendPlacementsToModels();
+      setStatus('Auto-save is on. Friend placements will update the map live.');
+    } else if (editTarget === 'tim') {
+      timPlacement = saveTimPlacement(timPlacement);
+      applyTimPlacementToModel();
+      setStatus('Auto-save is on. Tim placement will update the map live.');
+    } else if (editTarget === 'spawn') {
+      playerStart = savePlayerStart(playerStart);
+      setStatus('Auto-save is on. First spawn will update the map live.');
+    } else {
+      layout = saveForestLayout(layout);
+      setStatus('Auto-save is on. New edits will update the map live.');
+    }
   } else {
     setStatus('Auto-save is off. Use Save To Map when you want to push changes.');
   }
 });
 
 saveButton.addEventListener('click', () => {
+  if (editTarget === 'friends') {
+    friendLayout = saveFriendPlacements(friendLayout);
+    applyFriendPlacementsToModels();
+    updateOutput();
+    setStatus('Saved friend placements to the map.');
+    return;
+  }
+
+  if (editTarget === 'tim') {
+    timPlacement = saveTimPlacement(timPlacement);
+    applyTimPlacementToModel();
+    updateOutput();
+    setStatus('Saved Tim placement to the map.');
+    return;
+  }
+
+  if (editTarget === 'spawn') {
+    playerStart = savePlayerStart(playerStart);
+    updateOutput();
+    setStatus('Saved first spawn to the map.');
+    return;
+  }
+
   layout = saveForestLayout(layout);
   forestController.setLayout(layout);
   updateOutput();
@@ -475,10 +1156,22 @@ saveButton.addEventListener('click', () => {
 });
 
 copyButton.addEventListener('click', async () => {
-  const text = layoutToCode(layout);
+  const text = editTarget === 'friends'
+    ? friendLayoutToCode(friendLayout)
+    : editTarget === 'tim'
+      ? worldPlacementToCode('TIM_PLACEMENT', timPlacement)
+      : editTarget === 'spawn'
+        ? worldPlacementToCode('PLAYER_START', playerStart)
+        : layoutToCode(layout);
   try {
     await navigator.clipboard.writeText(text);
-    setStatus('Forest layout code copied to clipboard.');
+    setStatus(editTarget === 'friends'
+      ? 'Friend placement code copied to clipboard.'
+      : editTarget === 'tim'
+        ? 'Tim placement code copied to clipboard.'
+        : editTarget === 'spawn'
+          ? 'First spawn code copied to clipboard.'
+          : 'Forest layout code copied to clipboard.');
   } catch (e) {
     outputEl.focus();
     outputEl.select();
@@ -487,6 +1180,28 @@ copyButton.addEventListener('click', async () => {
 });
 
 deleteSelectedButton.addEventListener('click', () => {
+  if (editTarget === 'friends') {
+    if (selectedFriendIndex < 0 || !friendLayout[selectedFriendIndex]) {
+      setStatus('Select a friend first, then use Delete Selected to reset it.');
+      return;
+    }
+    resetFriendAtIndex(selectedFriendIndex);
+    return;
+  }
+
+  if (editTarget === 'tim') {
+    timPlacement = getDefaultTimPlacement();
+    applyTimPlacementToModel();
+    syncEditor('Tim reset to default placement.');
+    return;
+  }
+
+  if (editTarget === 'spawn') {
+    playerStart = getDefaultPlayerStart();
+    syncEditor('First spawn reset to default placement.');
+    return;
+  }
+
   if (selectedIndex < 0 || !layout[selectedIndex]) {
     setStatus('Select an item first, then use Delete Selected.');
     return;
@@ -495,12 +1210,57 @@ deleteSelectedButton.addEventListener('click', () => {
 });
 
 resetButton.addEventListener('click', () => {
+  if (editTarget === 'friends') {
+    friendLayout = getDefaultFriendPlacements();
+    selectedFriendIndex = -1;
+    applyFriendPlacementsToModels();
+    syncEditor('Reset to the default friend placements.');
+    return;
+  }
+
+  if (editTarget === 'tim') {
+    timPlacement = getDefaultTimPlacement();
+    applyTimPlacementToModel();
+    syncEditor('Reset to the default Tim placement.');
+    return;
+  }
+
+  if (editTarget === 'spawn') {
+    playerStart = getDefaultPlayerStart();
+    syncEditor('Reset to the default first spawn.');
+    return;
+  }
+
   layout = cloneDefaultLayout();
   selectedIndex = -1;
-  syncForest('Reset to the default forest layout.');
+  syncEditor('Reset to the default forest layout.');
 });
 
 clearSavedButton.addEventListener('click', () => {
+  if (editTarget === 'friends') {
+    clearFriendPlacements();
+    friendLayout = getDefaultFriendPlacements();
+    selectedFriendIndex = -1;
+    applyFriendPlacementsToModels();
+    syncEditor('Saved override cleared. Friend placements are back to defaults.');
+    return;
+  }
+
+  if (editTarget === 'tim') {
+    clearTimPlacement();
+    timPlacement = getDefaultTimPlacement();
+    applyTimPlacementToModel();
+    syncEditor('Saved override cleared. Tim is back to default placement.');
+    return;
+  }
+
+  if (editTarget === 'spawn') {
+    clearPlayerStart();
+    playerStart = getDefaultPlayerStart();
+    syncEditor('Saved override cleared. First spawn is back to default.');
+    return;
+  }
+
   clearForestLayout();
   setStatus('Saved override cleared. The live map will now fall back to the code layout.');
 });
@@ -523,5 +1283,7 @@ function animate() {
 updateRotationLabel();
 updateModeButtons();
 updatePaletteButtons();
-syncForest();
+updateFriendPaletteButtons();
+updateTargetButtons();
+setEditTarget('forest');
 animate();

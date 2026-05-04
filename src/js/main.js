@@ -5,6 +5,14 @@ import { createGardenZone } from './garden.js';
 import { createCityZone } from './city.js';
 import { createBeachZone } from './beach.js';
 import { createForestZone } from './forest.js';
+import {
+  FRIEND_DEFS,
+  loadFriendPlacements,
+  loadFriendUnlocks,
+  loadPlayerStart,
+  loadTimPlacement,
+  saveFriendUnlocks
+} from './friends.js';
 
 // Scene & renderer
 const container = document.getElementById('canvas-container') || document.body;
@@ -37,6 +45,8 @@ let controls = null;
 const blocker = document.getElementById('blocker');
 const instructions = document.getElementById('instructions');
 const playButton = document.getElementById('play-button');
+const loadingScreenElement = document.getElementById('loading-screen');
+const introScreenElement = document.getElementById('intro-screen');
 const weatherToggleButton = document.getElementById('weather-toggle');
 const weatherPanelElement = document.getElementById('weather-panel');
 const friendsToggleButton = document.getElementById('friends-toggle');
@@ -62,6 +72,8 @@ const questMainTextElement = document.getElementById('quest-main-text');
 const pauseOverlay = document.getElementById('pause-overlay');
 const interactUI = document.getElementById('interact-ui');
 const fadeScreen = document.getElementById('fade-screen');
+const weatherUnlockToast = document.getElementById('weather-unlock-toast');
+const weatherUnlockedCountElement = document.getElementById('weather-unlocked-count');
 // Audio
 const buttonClickAudio = new Audio('./audio/button-click.mp3');
 buttonClickAudio.preload = 'auto';
@@ -72,8 +84,41 @@ chatContinueAudio.preload = 'auto';
 const MUSIC_VOLUME_STORAGE_KEY = 'tim-birthday-music-volume';
 const SFX_VOLUME_STORAGE_KEY = 'tim-birthday-sfx-volume';
 const SENSITIVITY_STORAGE_KEY = 'tim-birthday-look-sensitivity';
+const GAME_PROGRESS_STORAGE_KEY = 'tim-birthday-game-progress-v1';
 
 let lookSensitivity = 1;
+let gameReady = false;
+let loadingStarted = false;
+
+function setIntroLoadingState(isLoading) {
+  if (loadingScreenElement) loadingScreenElement.classList.toggle('hidden', !isLoading);
+  if (introScreenElement) introScreenElement.classList.toggle('hidden', isLoading);
+}
+
+function markGameReady() {
+  if (gameReady) return;
+  gameReady = true;
+  setIntroLoadingState(false);
+}
+
+setIntroLoadingState(true);
+
+THREE.DefaultLoadingManager.onStart = () => {
+  loadingStarted = true;
+  setIntroLoadingState(true);
+};
+
+THREE.DefaultLoadingManager.onLoad = () => {
+  window.setTimeout(markGameReady, 150);
+};
+
+THREE.DefaultLoadingManager.onError = () => {
+  // The loading manager still calls onLoad when all pending assets settle.
+};
+
+window.setTimeout(() => {
+  if (!loadingStarted) markGameReady();
+}, 600);
 
 
 let canInteract = false;
@@ -171,6 +216,29 @@ function savePercentage(storageKey, percentage) {
   }
 }
 
+function loadGameProgress() {
+  try {
+    const raw = window.localStorage.getItem(GAME_PROGRESS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveGameProgress(progress) {
+  try {
+    const current = loadGameProgress();
+    window.localStorage.setItem(GAME_PROGRESS_STORAGE_KEY, JSON.stringify({
+      ...current,
+      ...progress
+    }));
+  } catch (e) {
+    // Ignore persistence failures.
+  }
+}
+
 const QUEST_FIND_BIRTHDAY_BOY = 'Find the Birthday Boy';
 const QUEST_FIND_FRIENDS = "Find Tim's friends";
 
@@ -179,11 +247,13 @@ const timDialogueLines = [
   "I'm inviting five friends to my birthday party! Find them all and then meet me here in the park!"
 ];
 
+let unlockedFriendIds = loadFriendUnlocks();
+const savedGameProgress = loadGameProgress();
 let currentQuest = '';
 let initialQuestSoundPlayed = false;
 let activeDialogue = null;
 let activeDialogueIndex = -1;
-let timDialogueCompleted = false;
+let timDialogueCompleted = Boolean(savedGameProgress.timDialogueCompleted || unlockedFriendIds.size > 0);
 
 function playButtonClickSound() {
   try {
@@ -231,6 +301,7 @@ document.addEventListener('click', (event) => {
 if (document.body) document.body.classList.add('pregame');
 
 let hasJoinedOnce = false;
+let initialPlayerStartApplied = false;
 let panelOpenedFromPointerLock = false;
 
 const PANEL_BY_ID = {
@@ -240,19 +311,102 @@ const PANEL_BY_ID = {
   'help-panel': helpPanelElement
 };
 
-const friendsState = [
-  {
-    name: 'Hunter',
-    description: "He's quiet and a bit shy, but with a sassy edge and a love for the loud energy of the city",
-    weather: '⛈️ Stormy Night',
-    image: 'images/friend1.png',
-    unlocked: true
-  },
-  { name: '???', description: 'Find this friend to unlock their info!', weather: '🔒 Locked', image: '', unlocked: false },
-  { name: '???', description: 'Find this friend to unlock their info!', weather: '🔒 Locked', image: '', unlocked: false },
-  { name: '???', description: 'Find this friend to unlock their info!', weather: '🔒 Locked', image: '', unlocked: false },
-  { name: '???', description: 'Find this friend to unlock their info!', weather: '🔒 Locked', image: '', unlocked: false }
-];
+const friendsState = FRIEND_DEFS.map((def) => {
+  const unlocked = unlockedFriendIds.has(def.id);
+  return {
+    id: def.id,
+    name: unlocked ? def.name : '???',
+    description: unlocked ? def.description : 'Find this friend to unlock their info!',
+    weather: unlocked ? def.weatherLabel : '🔒 Locked',
+    image: unlocked ? def.image : '',
+    unlocked
+  };
+});
+
+const BASE_UNLOCKED_WEATHER_IDS = Object.freeze(['sunny', 'night']);
+
+function computeUnlockedWeatherIds() {
+  const unlocked = new Set(BASE_UNLOCKED_WEATHER_IDS);
+  FRIEND_DEFS.forEach((def) => {
+    if (def.weatherId && unlockedFriendIds.has(def.id)) unlocked.add(def.weatherId);
+  });
+  return unlocked;
+}
+
+function syncWeatherUnlockUI() {
+  const weatherOptions = Array.from(document.querySelectorAll('.weather-option[data-weather]'));
+  const unlockedWeatherIds = computeUnlockedWeatherIds();
+
+  let unlockedCount = 0;
+  weatherOptions.forEach((btn) => {
+    const weatherId = btn.dataset.weather;
+    const unlocked = Boolean(weatherId && unlockedWeatherIds.has(weatherId));
+    btn.classList.toggle('locked', !unlocked);
+    btn.disabled = !unlocked;
+    btn.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
+    if (unlocked) unlockedCount += 1;
+
+    const small = btn.querySelector('small');
+    if (small) small.textContent = unlocked ? 'Click to activate' : '🔒 Locked';
+  });
+
+  if (weatherUnlockedCountElement) {
+    weatherUnlockedCountElement.textContent = `Unlocked ${unlockedCount} of ${weatherOptions.length} weather effects`;
+  }
+}
+
+function showWeatherUnlockToast(weatherLabel) {
+  if (!weatherUnlockToast) return;
+  const safeLabel = String(weatherLabel || '').trim();
+  if (!safeLabel) return;
+
+  weatherUnlockToast.innerHTML = `<strong>New weather unlocked!</strong><span>${safeLabel}</span>`;
+  weatherUnlockToast.classList.remove('hidden');
+  clearTimeout(weatherUnlockToast._hideTO);
+  weatherUnlockToast._hideTO = window.setTimeout(() => {
+    weatherUnlockToast.classList.add('hidden');
+  }, 2600);
+}
+
+function unlockFriend(friendId) {
+  const id = String(friendId || '');
+  const def = FRIEND_DEFS.find((d) => d.id === id);
+  if (!def) return false;
+  if (unlockedFriendIds.has(id)) return false;
+
+  const beforeUnlockedWeathers = computeUnlockedWeatherIds();
+
+  unlockedFriendIds.add(id);
+  unlockedFriendIds = saveFriendUnlocks(unlockedFriendIds);
+
+  const stateIndex = friendsState.findIndex((f) => f.id === id);
+  if (stateIndex >= 0) {
+    friendsState[stateIndex] = {
+      ...friendsState[stateIndex],
+      name: def.name,
+      description: def.description,
+      weather: def.weatherLabel,
+      image: def.image,
+      unlocked: true
+    };
+  }
+
+  renderFriendsPanel();
+  syncWeatherUnlockUI();
+
+  const afterUnlockedWeathers = computeUnlockedWeatherIds();
+  if (def.weatherId && !beforeUnlockedWeathers.has(def.weatherId) && afterUnlockedWeathers.has(def.weatherId)) {
+    showWeatherUnlockToast(def.weatherLabel);
+  }
+
+  return true;
+}
+
+function setTimDialogueCompleted(completed) {
+  timDialogueCompleted = Boolean(completed);
+  saveGameProgress({ timDialogueCompleted });
+  updateFriendVisibility();
+}
 
 function showIntroOverlay() {
   if (blocker) blocker.classList.remove('hidden');
@@ -341,8 +495,9 @@ function renderFriendsPanel() {
 function setupInterface() {
   if (chatBubbleElement) chatBubbleElement.classList.add('hidden');
   hidePauseOverlay();
-  setQuest(QUEST_FIND_BIRTHDAY_BOY, { playSound: false });
+  setQuest(timDialogueCompleted ? QUEST_FIND_FRIENDS : QUEST_FIND_BIRTHDAY_BOY, { playSound: false });
   renderFriendsPanel();
+  syncWeatherUnlockUI();
 
   if (weatherToggleButton) weatherToggleButton.addEventListener('click', () => togglePanel('weather-panel'));
   if (friendsToggleButton) friendsToggleButton.addEventListener('click', () => togglePanel('friends-panel'));
@@ -467,6 +622,32 @@ function setupInterface() {
 showIntroOverlay();
 setupInterface();
 
+function applyInitialPlayerStart() {
+  if (initialPlayerStartApplied || !controls || !controls.getObject) return;
+  const start = loadPlayerStart();
+  const x = Number(start.x);
+  const y = Number(start.y);
+  const z = Number(start.z);
+  const rotationY = Number(start.rotationY);
+  const playerObject = controls.getObject();
+
+  playerObject.position.set(
+    Number.isFinite(x) ? x : -18,
+    (Number.isFinite(y) ? y : 0) + PLAYER_HEIGHT,
+    Number.isFinite(z) ? z : 20
+  );
+  playerObject.rotation.set(0, Number.isFinite(rotationY) ? rotationY : 0, 0);
+  initialPlayerStartApplied = true;
+}
+
+function requestStartPointerLock() {
+  if (!gameReady) return;
+  if (!hasJoinedOnce && controls && !controls.isLocked) {
+    playButtonClickSound();
+    controls.lock();
+  }
+}
+
 function initPointerLock() {
   controls = new PointerLockControls(camera, document.body);
   controls.pointerSpeed = lookSensitivity;
@@ -527,6 +708,7 @@ function initPointerLock() {
     hidePauseOverlay();
     if (blocker) blocker.classList.add('hidden');
     if (!hasJoinedOnce) {
+      applyInitialPlayerStart();
       hasJoinedOnce = true;
       if (document.body) document.body.classList.remove('pregame');
       if (!initialQuestSoundPlayed) {
@@ -552,16 +734,13 @@ function initPointerLock() {
     btn.addEventListener('click', function (event) {
       event.preventDefault();
       event.stopPropagation();
-      controls.lock();
+      requestStartPointerLock();
     });
   });
 
   if (instructions) {
     instructions.addEventListener('click', function () {
-      if (!hasJoinedOnce && controls && !controls.isLocked) {
-        playButtonClickSound();
-        controls.lock();
-      }
+      requestStartPointerLock();
     });
   }
 
@@ -994,6 +1173,17 @@ syncSceneMeshShadows(true);
 // GLTF/GLB model loader and placement
 const loader = new GLTFLoader();
 let actor = null;
+const friendActors = [];
+const friendActorsById = new Map();
+
+function updateFriendVisibility() {
+  const visible = Boolean(timDialogueCompleted);
+  for (const friend of friendActors) {
+    if (!friend) continue;
+    friend.visible = visible;
+    friend.userData.noCollision = !visible;
+  }
+}
 
 function enableShadows(model) {
   model.traverse((node) => {
@@ -1056,22 +1246,33 @@ function tuneTreeMaterials(model) {
   });
 }
 
-function loadFriendModel(friendLoader, config) {
-  const { fileName, desiredHeight, offsetX, offsetZ } = config;
-  friendLoader.load(`./models/Friends/${fileName}`, (gltf) => {
+function loadFriendModel(friendLoader, def, placement) {
+  friendLoader.load(`./models/Friends/${def.fileName}`, (gltf) => {
     const friend = gltf.scene;
+    friend.name = def.id;
+    friend.userData.friendId = def.id;
+
     enableShadows(friend);
-    const box = scaleModelToHeight(friend, desiredHeight);
+    const box = scaleModelToHeight(friend, def.desiredHeight);
     placeModelOnGround(friend, box);
-    try {
-      friend.position.x = actor.position.x + offsetX;
-      friend.position.z = actor.position.z + offsetZ;
-    } catch (e) {
-      friend.position.set(offsetX, 0, offsetZ);
-    }
+    friend.userData.groundY = friend.position.y;
+    smoothModelShading(friend);
+
+    const x = Number(placement && placement.x) || 0;
+    const y = Number(placement && placement.y) || 0;
+    const z = Number(placement && placement.z) || 0;
+    const rotationY = Number(placement && placement.rotationY) || 0;
+    friend.position.set(x, friend.userData.groundY + y, z);
+    friend.rotation.y = rotationY;
+    friend.visible = Boolean(timDialogueCompleted);
+    friend.userData.noCollision = !timDialogueCompleted;
+
     scene.add(friend);
+    friendActors.push(friend);
+    friendActorsById.set(def.id, friend);
+    updateFriendVisibility();
   }, undefined, (err) => {
-    console.warn(`Failed to load ${fileName}`, err);
+    console.warn(`Failed to load ${def.fileName}`, err);
   });
 }
 
@@ -1081,27 +1282,31 @@ loader.load('./models/Friends/birthday_boy.glb', (gltf) => {
   const desiredHeight = 1.2;
   const box = scaleModelToHeight(actor, desiredHeight);
   placeModelOnGround(actor, box);
-  actor.position.z = 0;
-  actor.position.x = 0;
+  actor.userData.groundY = actor.position.y;
+  const timPlacement = loadTimPlacement();
+  const timX = Number(timPlacement.x) || 0;
+  const timY = Number(timPlacement.y) || 0;
+  const timZ = Number(timPlacement.z) || 0;
+  const timRotationY = Number(timPlacement.rotationY) || 0;
+  actor.position.set(timX, actor.userData.groundY + timY, timZ);
+  actor.rotation.y = timRotationY;
   smoothModelShading(actor);
 
   // keep the NPC independent in the scene
   scene.add(actor);
 
   const friendLoader = new GLTFLoader();
-  [
-    { fileName: 'friend1.glb', desiredHeight: 1.1, offsetX: 1.4, offsetZ: 1.0 },
-    { fileName: 'friend2.glb', desiredHeight: 1.05, offsetX: -1.2, offsetZ: 0.15 },
-    { fileName: 'friend3.glb', desiredHeight: 1.08, offsetX: 0.2, offsetZ: -1.3 },
-    { fileName: 'friend4.glb', desiredHeight: 1.06, offsetX: 1.6, offsetZ: 1.6 },
-    { fileName: 'friend5.glb', desiredHeight: 1.02, offsetX: -1.6, offsetZ: -1.4 }
-  ].forEach((config) => loadFriendModel(friendLoader, config));
+  const friendPlacements = loadFriendPlacements();
+  const placementById = new Map(friendPlacements.map((p) => [p.id, p]));
+  FRIEND_DEFS.forEach((def) => {
+    loadFriendModel(friendLoader, def, placementById.get(def.id));
+  });
 
   // Make player height match the NPC approximate height so the camera eye is at similar level
   // desiredHeight was used to scale the model earlier; use it for the camera height
   try {
     PLAYER_HEIGHT = desiredHeight;
-    if (controls && controls.getObject) {
+    if (hasJoinedOnce && controls && controls.getObject) {
       // maintain current x/z but set camera Y to PLAYER_HEIGHT
       const cur = controls.getObject().position;
       controls.getObject().position.set(cur.x, PLAYER_HEIGHT, cur.z);
@@ -1109,19 +1314,6 @@ loader.load('./models/Friends/birthday_boy.glb', (gltf) => {
   } catch (e) {
     console.warn('Could not set PLAYER_HEIGHT to model size', e);
   }
-
-  // compute a forward direction from actor's orientation (fallback if none)
-  const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(actor.quaternion).normalize();
-  // position the control/camera object some distance in front of the actor so player spawns facing NPC
-  const actorWorldPos = new THREE.Vector3();
-  actor.getWorldPosition(actorWorldPos);
-  const spawnDistance = 6.0; // units away from actor
-  // place the camera in front of the actor (along actor forward)
-  const spawnPos = actorWorldPos.clone().add(forward.clone().multiplyScalar(spawnDistance));
-  controls.getObject().position.set(spawnPos.x, PLAYER_HEIGHT, spawnPos.z);
-
-  // look at actor
-  camera.lookAt(actorWorldPos);
 
   console.log('Loaded actor (NPC):', actor);
 }, undefined, (err) => {
@@ -1132,31 +1324,73 @@ const INTERACT_DISTANCE = 2.0; // units
 const FACING_DOT_THRESHOLD = 0.60; // cosine of acceptable facing angle (~53deg)
 const interactHint = document.getElementById('interact-hint');
 
-// E-key handler: trigger chat when near NPC
+function getDialogueConfig(dialogueKey) {
+  if (dialogueKey === 'tim-intro') {
+    return {
+      lines: timDialogueLines,
+      speaker: 'Tim',
+      image: 'images/boy1.png',
+      onComplete: () => {
+        setTimDialogueCompleted(true);
+        setQuest(QUEST_FIND_FRIENDS, { playSound: true });
+      }
+    };
+  }
+
+  const def = FRIEND_DEFS.find((d) => d.id === dialogueKey);
+  if (!def) return null;
+
+  return {
+    lines: Array.isArray(def.dialogueLines) ? def.dialogueLines : [],
+    speaker: def.name,
+    image: def.image,
+    onComplete: () => {
+      unlockFriend(def.id);
+    }
+  };
+}
+
+function startDialogue(dialogueKey) {
+  const cfg = getDialogueConfig(dialogueKey);
+  if (!cfg || !cfg.lines || !cfg.lines.length) return false;
+  activeDialogue = dialogueKey;
+  activeDialogueIndex = 0;
+  showChatBubble(cfg.lines[activeDialogueIndex], 0, cfg.image, cfg.speaker);
+  return true;
+}
+
+// E-key handler: trigger chat when near Tim or friends
 document.addEventListener('keydown', (ev) => {
   if (ev.code !== 'KeyE') return;
+  if (ev.repeat) return;
+
+  // Ladder interaction uses E too; give it priority.
+  if (canInteract) return;
 
   try {
     // 👉 If dialogue is active → handle it FIRST
-    if (activeDialogue === 'tim-intro') {
-      playChatContinueSound();
-
-      if (activeDialogueIndex < timDialogueLines.length - 1) {
-        activeDialogueIndex++;
-        showChatBubble(
-          timDialogueLines[activeDialogueIndex],
-          0,
-          'images/boy1.png',
-          'Tim'
-        );
-      } else {
-        chatBubbleElement.classList.add('hidden');
-        chatBubbleElement.innerHTML = '';
+    if (activeDialogue) {
+      const cfg = getDialogueConfig(activeDialogue);
+      if (!cfg) {
         activeDialogue = null;
         activeDialogueIndex = -1;
-        timDialogueCompleted = true;
+        if (chatBubbleElement) chatBubbleElement.classList.add('hidden');
+        return;
+      }
 
-        setQuest(QUEST_FIND_FRIENDS, { playSound: true });
+      playChatContinueSound();
+
+      if (activeDialogueIndex < cfg.lines.length - 1) {
+        activeDialogueIndex++;
+        showChatBubble(cfg.lines[activeDialogueIndex], 0, cfg.image, cfg.speaker);
+      } else {
+        if (chatBubbleElement) {
+          chatBubbleElement.classList.add('hidden');
+          chatBubbleElement.innerHTML = '';
+        }
+        activeDialogue = null;
+        activeDialogueIndex = -1;
+        if (typeof cfg.onComplete === 'function') cfg.onComplete();
       }
       return;
     }
@@ -1168,41 +1402,57 @@ document.addEventListener('keydown', (ev) => {
     }
 
     // 👉 Start dialogue
-    if (!actor || !controls || !controls.getObject) return;
-    if (!controls.isLocked) return;
-
-    const actorPos = new THREE.Vector3();
-    actor.getWorldPosition(actorPos);
-
-    const playerPos = controls.getObject().position.clone();
-    const d = actorPos.distanceTo(playerPos);
-    if (d > INTERACT_DISTANCE) return;
+    if (!controls || !controls.getObject || !controls.isLocked) return;
 
     const camObj = controls.getObject();
+    const playerPos = camObj.position.clone();
     const forward = new THREE.Vector3(0, 0, -1)
       .applyQuaternion(camObj.quaternion)
       .setY(0)
       .normalize();
 
-    const toActor = actorPos.clone()
-      .sub(playerPos)
-      .setY(0)
-      .normalize();
-
-    const dot = forward.dot(toActor);
-    if (dot >= FACING_DOT_THRESHOLD) {
-      if (timDialogueCompleted) return;
-
-      activeDialogue = 'tim-intro';
-      activeDialogueIndex = 0;
-
-      showChatBubble(
-        timDialogueLines[activeDialogueIndex],
-        0,
-        'images/boy1.png',
-        'Tim'
-      );
+    // 1) Tim
+    if (actor && !timDialogueCompleted) {
+      const actorPos = new THREE.Vector3();
+      actor.getWorldPosition(actorPos);
+      const d = actorPos.distanceTo(playerPos);
+      if (d <= INTERACT_DISTANCE) {
+        const toActor = actorPos.clone().sub(playerPos).setY(0).normalize();
+        const dot = forward.dot(toActor);
+        if (dot >= FACING_DOT_THRESHOLD) {
+          startDialogue('tim-intro');
+          return;
+        }
+      }
     }
+
+    // 2) Nearest friend
+    let nearestFriendId = null;
+    let nearestDist = Infinity;
+    if (timDialogueCompleted) {
+      for (const friend of friendActors) {
+        if (!friend || !friend.visible) continue;
+        const friendId = String(friend.userData && friend.userData.friendId || friend.name || '');
+        if (!FRIEND_DEFS.some((d) => d.id === friendId)) continue;
+        if (unlockedFriendIds.has(friendId)) continue;
+
+        const friendPos = new THREE.Vector3();
+        friend.getWorldPosition(friendPos);
+        const d = friendPos.distanceTo(playerPos);
+        if (d > INTERACT_DISTANCE) continue;
+
+        const toFriend = friendPos.clone().sub(playerPos).setY(0).normalize();
+        const dot = forward.dot(toFriend);
+        if (dot < FACING_DOT_THRESHOLD) continue;
+
+        if (d < nearestDist) {
+          nearestDist = d;
+          nearestFriendId = friendId;
+        }
+      }
+    }
+
+    if (nearestFriendId) startDialogue(nearestFriendId);
 
   } catch (e) {
     // ignore
@@ -1297,27 +1547,60 @@ function animate() {
 
   // proximity check for interact hint
   try {
-    if (actor && controls && controls.getObject) {
+    if (!interactHint) return;
+    if (!controls || !controls.getObject || !controls.isLocked) {
+      interactHint.classList.add('hidden');
+      return;
+    }
+    if (chatBubbleElement && !chatBubbleElement.classList.contains('hidden')) {
+      interactHint.classList.add('hidden');
+      return;
+    }
+
+    const camObj = controls.getObject();
+    const playerPos = camObj.position;
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camObj.quaternion).setY(0).normalize();
+
+    let shouldShow = false;
+
+    // Tim (only while intro dialogue is incomplete)
+    if (actor && !timDialogueCompleted) {
       const actorPos = new THREE.Vector3();
       actor.getWorldPosition(actorPos);
-      const playerPos = controls.getObject().position;
       const d = actorPos.distanceTo(playerPos);
-      // only show hint when close AND facing the NPC
-      if (interactHint) {
-        const camObj = controls.getObject();
-        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camObj.quaternion).setY(0).normalize();
-        const toActor = actorPos.clone().sub(playerPos).setY(0).normalize();
-        const dot = forward.dot(toActor);
-        if (d <= INTERACT_DISTANCE && dot >= FACING_DOT_THRESHOLD) interactHint.classList.remove('hidden'); else interactHint.classList.add('hidden');
+      const toActor = actorPos.clone().sub(playerPos).setY(0).normalize();
+      const dot = forward.dot(toActor);
+      if (d <= INTERACT_DISTANCE && dot >= FACING_DOT_THRESHOLD) shouldShow = true;
+    }
+
+    // Friends
+    if (!shouldShow && timDialogueCompleted && friendActors.length) {
+      for (const friend of friendActors) {
+        if (!friend || !friend.visible) continue;
+        const friendId = String(friend.userData && friend.userData.friendId || friend.name || '');
+        if (unlockedFriendIds.has(friendId)) continue;
+        const friendPos = new THREE.Vector3();
+        friend.getWorldPosition(friendPos);
+        const d = friendPos.distanceTo(playerPos);
+        if (d > INTERACT_DISTANCE) continue;
+        const toFriend = friendPos.clone().sub(playerPos).setY(0).normalize();
+        const dot = forward.dot(toFriend);
+        if (dot >= FACING_DOT_THRESHOLD) {
+          shouldShow = true;
+          break;
+        }
       }
     }
+
+    if (shouldShow) interactHint.classList.remove('hidden');
+    else interactHint.classList.add('hidden');
   } catch (e) { /* ignore */ }
   try { checkInteraction(camera, scene); } catch (e) { /* ignore */ }
   renderer.render(scene, camera);
 }
 animate();
 
-// Weather UI and weather simulation (all weathers unlocked for testing).
+// Weather UI and weather simulation (weather unlocks via friends).
 (() => {
   let currentWeather = 'sunny';
   let particlesEnabled = !settingParticles || settingParticles.checked;
@@ -2380,6 +2663,7 @@ animate();
   const weatherOptions = Array.from(document.querySelectorAll('.weather-option[data-weather]'));
   weatherOptions.forEach((btn) => {
     btn.addEventListener('click', () => {
+      if (btn.disabled || btn.classList.contains('locked')) return;
       const requested = btn.dataset.weather;
       if (!requested) return;
       applyWeather(requested);
