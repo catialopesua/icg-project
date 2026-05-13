@@ -28,10 +28,19 @@ import {
   savePlayerStart,
   saveTimPlacement
 } from './friends.js';
+import {
+  PARK_CENTER_X,
+  PARK_CENTER_Z,
+  PARTY_BALLOON_IDS,
+  PARTY_ELEMENT_DEFS,
+  clearPartyLayout,
+  getDefaultPartyLayout,
+  getPartyElementDef,
+  loadPartyLayout,
+  partyLayoutToCode,
+  savePartyLayout
+} from './party.js';
 
-const PARK_CENTER_X = -18;
-const PARK_CENTER_Z = 12;
-const ITEM_SELECT_RADIUS = 2.35;
 const PAINT_SPACING = {
   tree: 2.8,
   grass: 1.4,
@@ -69,6 +78,12 @@ const FRIEND_COLORS = {
 };
 const TIM_COLOR = 0xffd34f;
 const SPAWN_COLOR = 0x40b868;
+const PARTY_SELECT_RADIUS = 2.6;
+const PARTY_COLORS = {
+  table: 0xf2539d,
+  balloons: 0x63d7ff,
+  participant: 0xffc247
+};
 
 const container = document.getElementById('canvas-container');
 const statusEl = document.getElementById('debug-status');
@@ -84,19 +99,24 @@ const editForestButton = document.getElementById('edit-forest');
 const editFriendsButton = document.getElementById('edit-friends');
 const editTimButton = document.getElementById('edit-tim');
 const editSpawnButton = document.getElementById('edit-spawn');
+const editPartyButton = document.getElementById('edit-party');
 const paintModeButton = document.getElementById('paint-mode');
 const selectModeButton = document.getElementById('select-mode');
 const autosaveToggle = document.getElementById('autosave-toggle');
 const paintPaletteElement = document.getElementById('paint-palette');
 const friendPaletteElement = document.getElementById('friend-palette');
+const partyPaletteElement = document.getElementById('party-palette');
 const paletteButtons = Array.from(document.querySelectorAll('[data-item-type]'));
 const friendPaletteButtons = Array.from(document.querySelectorAll('[data-friend-id]'));
+const partyPaletteButtons = Array.from(document.querySelectorAll('[data-party-id]'));
 const placementEditorElement = document.getElementById('placement-editor');
 const placementTitleElement = document.getElementById('placement-title');
 const placementXInput = document.getElementById('placement-x');
 const placementYInput = document.getElementById('placement-y');
 const placementZInput = document.getElementById('placement-z');
 const placementRotationInput = document.getElementById('placement-rotation');
+const placementScaleRow = document.getElementById('placement-scale-row');
+const placementScaleInput = document.getElementById('placement-scale');
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xdce9d9);
@@ -210,12 +230,15 @@ let layout = loadForestLayout();
 let friendLayout = loadFriendPlacements();
 let timPlacement = loadTimPlacement();
 let playerStart = loadPlayerStart();
+let partyLayout = loadPartyLayout();
 
 let selectedIndex = -1;
 let selectedFriendIndex = -1;
+let selectedPartyIndex = -1;
 let editorMode = 'paint';
 let paintType = 'tree';
 let paintFriendId = FRIEND_DEFS[0] ? FRIEND_DEFS[0].id : 'friend1';
+let paintPartyId = PARTY_ELEMENT_DEFS[0] ? PARTY_ELEMENT_DEFS[0].id : 'table';
 let isPainting = false;
 let lastPaintPoint = null;
 let pointerDown = null;
@@ -233,6 +256,11 @@ scene.add(markerGroup);
 const friendModelsById = new Map();
 const friendLoader = new GLTFLoader();
 let timModel = null;
+let partyPreviewGroup = null;
+let partyCakePreview = null;
+let partyCakePreviewLoadStarted = false;
+const partyOffsetVector = new THREE.Vector3();
+const partyUpAxis = new THREE.Vector3(0, 1, 0);
 
 function enableShadows(model) {
   model.traverse((node) => {
@@ -275,6 +303,196 @@ function smoothModelShading(model) {
   });
 }
 
+function getPlacementScale(placement) {
+  return Math.max(0.2, Number(placement && placement.scale) || 1);
+}
+
+function getModelBaseScale(model) {
+  return Number(model && model.userData && model.userData.baseScale) || Number(model && model.scale && model.scale.x) || 1;
+}
+
+function getPartyPlacementById(partyId) {
+  return partyLayout.find((placement) => placement && placement.id === partyId) || null;
+}
+
+function getEditablePartyIndex() {
+  if (selectedPartyIndex >= 0 && partyLayout[selectedPartyIndex]) return selectedPartyIndex;
+  const paintIndex = partyLayout.findIndex((placement) => placement && placement.id === paintPartyId);
+  return paintIndex >= 0 ? paintIndex : -1;
+}
+
+function setRelativePartyPosition(object, placement, localX, localY, localZ) {
+  partyOffsetVector.set(localX, 0, localZ).applyAxisAngle(partyUpAxis, Number(placement.rotationY) || 0);
+  object.position.set(
+    Number(placement.x) + partyOffsetVector.x,
+    Number(placement.y) + localY,
+    Number(placement.z) + partyOffsetVector.z
+  );
+}
+
+function createFallbackCakePreview() {
+  const cake = new THREE.Group();
+  cake.name = 'debug-fallback-cake';
+  cake.userData.baseScale = 1;
+
+  const cakeMat = new THREE.MeshStandardMaterial({ color: 0xffb8d8, roughness: 0.7, metalness: 0.02 });
+  const icingMat = new THREE.MeshStandardMaterial({ color: 0xfff4fb, roughness: 0.62, metalness: 0.01 });
+  const candleMat = new THREE.MeshStandardMaterial({ color: 0x5bc7ff, roughness: 0.5, metalness: 0.02 });
+  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffc94f });
+
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.22, 40), cakeMat);
+  base.position.y = 0.11;
+  const icing = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.055, 40), icingMat);
+  icing.position.y = 0.245;
+  cake.add(base, icing);
+
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2;
+    const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.19, 10), candleMat);
+    candle.position.set(Math.sin(angle) * 0.2, 0.36, Math.cos(angle) * 0.2);
+    const flame = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), flameMat);
+    flame.position.set(candle.position.x, 0.49, candle.position.z);
+    flame.scale.y = 1.45;
+    cake.add(candle, flame);
+  }
+
+  cake.traverse((node) => {
+    if (!node.isMesh) return;
+    node.castShadow = true;
+    node.receiveShadow = true;
+  });
+
+  return cake;
+}
+
+function attachPartyCakePreview() {
+  if (!partyPreviewGroup || !partyCakePreview) return;
+  if (partyCakePreview.parent !== partyPreviewGroup) partyPreviewGroup.add(partyCakePreview);
+  updatePartyPreview();
+}
+
+function loadPartyCakePreview() {
+  if (partyCakePreviewLoadStarted) return;
+  partyCakePreviewLoadStarted = true;
+
+  friendLoader.load('./models/cake.glb', (gltf) => {
+    partyCakePreview = gltf.scene;
+    partyCakePreview.name = 'debug-party-cake';
+    enableShadows(partyCakePreview);
+    const box = scaleModelToHeight(partyCakePreview, 0.72);
+    partyCakePreview.userData.baseScale = partyCakePreview.scale.x;
+    placeModelOnGround(partyCakePreview, box);
+    smoothModelShading(partyCakePreview);
+    attachPartyCakePreview();
+  }, undefined, () => {
+    partyCakePreview = createFallbackCakePreview();
+    attachPartyCakePreview();
+  });
+}
+
+function ensurePartyPreview() {
+  if (partyPreviewGroup) return partyPreviewGroup;
+
+  partyPreviewGroup = new THREE.Group();
+  partyPreviewGroup.name = 'party-preview';
+  scene.add(partyPreviewGroup);
+
+  const balloonColors = [0xff4f9d, 0xffcf42, 0x63d7ff, 0x7fe06f, 0xb26cff, 0xff7b54];
+  const stringMat = new THREE.MeshStandardMaterial({ color: 0xf7e8c7, roughness: 0.9, metalness: 0.01 });
+  PARTY_BALLOON_IDS.forEach((id, cluster) => {
+    for (let j = 0; j < 3; j++) {
+      const balloon = new THREE.Mesh(
+        new THREE.SphereGeometry(0.22, 18, 16),
+        new THREE.MeshStandardMaterial({ color: balloonColors[(cluster + j) % balloonColors.length], roughness: 0.38, metalness: 0.02 })
+      );
+      balloon.name = `${id}-balloon-${j}`;
+      balloon.castShadow = true;
+      partyPreviewGroup.add(balloon);
+
+      const string = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.2, 6), stringMat);
+      string.name = `${id}-string-${j}`;
+      partyPreviewGroup.add(string);
+    }
+  });
+
+  const partyLight = new THREE.PointLight(0xffd69a, 1.2, 12, 1.7);
+  partyLight.name = 'party-preview-light';
+  partyPreviewGroup.add(partyLight);
+
+  loadPartyCakePreview();
+  return partyPreviewGroup;
+}
+
+function updatePartyPreview() {
+  const preview = ensurePartyPreview();
+  const tablePlacement = getPartyPlacementById('table');
+  if (!tablePlacement) return;
+
+  const tableScale = getPlacementScale(tablePlacement);
+
+  PARTY_BALLOON_IDS.forEach((id, cluster) => {
+    const placement = getPartyPlacementById(id);
+    if (!placement) return;
+    const scale = getPlacementScale(placement);
+    for (let j = 0; j < 3; j++) {
+      const balloon = preview.getObjectByName(`${id}-balloon-${j}`);
+      const string = preview.getObjectByName(`${id}-string-${j}`);
+      const x = placement.x + (j - 1) * 0.18 * scale;
+      const y = placement.y + (2.25 + j * 0.18) * scale;
+      const z = placement.z + Math.sin(j * 1.7) * 0.16 * scale;
+      if (balloon) {
+        balloon.position.set(x, y, z);
+        balloon.rotation.y = Number(placement.rotationY) || 0;
+        balloon.scale.set(scale, 1.18 * scale, scale);
+      }
+      if (string) {
+        string.position.set(x, y - 0.74 * scale, z);
+        string.scale.setScalar(scale);
+      }
+    }
+  });
+
+  const partyLight = preview.getObjectByName('party-preview-light');
+  if (partyLight) {
+    partyLight.position.set(tablePlacement.x, tablePlacement.y + 3.3 * tableScale, tablePlacement.z + 0.8 * tableScale);
+  }
+
+  if (partyCakePreview) {
+    const baseScale = getModelBaseScale(partyCakePreview);
+    partyCakePreview.position.set(tablePlacement.x, tablePlacement.y, tablePlacement.z);
+    partyCakePreview.rotation.y = (Number(tablePlacement.rotationY) || 0) + Math.PI * 0.12;
+    partyCakePreview.scale.setScalar(baseScale * tableScale);
+  }
+}
+
+function applyPartyPreviewToModels() {
+  if (timModel) {
+    const placement = getPartyPlacementById('tim');
+    if (placement) {
+      const baseY = Number.isFinite(timModel.userData.groundY) ? timModel.userData.groundY : 0;
+      const baseScale = getModelBaseScale(timModel);
+      timModel.position.set(placement.x, baseY + (Number(placement.y) || 0), placement.z);
+      timModel.rotation.y = Number(placement.rotationY) || 0;
+      timModel.scale.setScalar(baseScale * getPlacementScale(placement));
+    }
+  }
+
+  FRIEND_DEFS.forEach((def) => {
+    const model = friendModelsById.get(def.id);
+    const placement = getPartyPlacementById(def.id);
+    if (!model || !placement) return;
+    const baseY = Number.isFinite(model.userData.groundY) ? model.userData.groundY : 0;
+    const baseScale = getModelBaseScale(model);
+    model.position.set(placement.x, baseY + (Number(placement.y) || 0), placement.z);
+    model.rotation.y = Number(placement.rotationY) || 0;
+    model.scale.setScalar(baseScale * getPlacementScale(placement));
+  });
+}
+
+function setPartyPreviewVisible(visible) {
+  ensurePartyPreview().visible = visible;
+}
+
 function applyFriendPlacementToModel(friendId) {
   const model = friendModelsById.get(friendId);
   const placement = friendLayout.find((p) => p && p.id === friendId);
@@ -283,6 +501,7 @@ function applyFriendPlacementToModel(friendId) {
   const baseY = Number.isFinite(model.userData.groundY) ? model.userData.groundY : 0;
   model.position.set(placement.x, baseY + (Number(placement.y) || 0), placement.z);
   model.rotation.y = placement.rotationY || 0;
+  model.scale.setScalar(getModelBaseScale(model));
 }
 
 function applyFriendPlacementsToModels() {
@@ -298,6 +517,7 @@ function applyTimPlacementToModel() {
     Number(timPlacement.z) || 0
   );
   timModel.rotation.y = Number(timPlacement.rotationY) || 0;
+  timModel.scale.setScalar(getModelBaseScale(timModel));
 }
 
 function loadFriendModels() {
@@ -308,12 +528,14 @@ function loadFriendModels() {
       friend.userData.friendId = def.id;
       enableShadows(friend);
       const box = scaleModelToHeight(friend, def.desiredHeight);
+      friend.userData.baseScale = friend.scale.x;
       placeModelOnGround(friend, box);
       friend.userData.groundY = friend.position.y;
       smoothModelShading(friend);
       friendModelsById.set(def.id, friend);
       scene.add(friend);
       applyFriendPlacementToModel(def.id);
+      if (editTarget === 'party') applyPartyPreviewToModels();
     }, undefined, (err) => {
       console.warn(`Failed to load ${def.fileName}`, err);
     });
@@ -327,11 +549,13 @@ function loadTimModel() {
     timModel.userData.tim = true;
     enableShadows(timModel);
     const box = scaleModelToHeight(timModel, 1.2);
+    timModel.userData.baseScale = timModel.scale.x;
     placeModelOnGround(timModel, box);
     timModel.userData.groundY = timModel.position.y;
     smoothModelShading(timModel);
     scene.add(timModel);
     applyTimPlacementToModel();
+    if (editTarget === 'party') applyPartyPreviewToModels();
   }, undefined, (err) => {
     console.warn('Failed to load birthday_boy.glb', err);
   });
@@ -371,6 +595,14 @@ function updateFriendPaletteButtons() {
   });
 }
 
+function updatePartyPaletteButtons() {
+  partyPaletteButtons.forEach((button) => {
+    const active = button.dataset.partyId === paintPartyId;
+    button.classList.toggle('active-mode', active);
+    button.classList.toggle('secondary', !active);
+  });
+}
+
 function updateTargetButtons() {
   if (editForestButton) {
     editForestButton.classList.toggle('active-mode', editTarget === 'forest');
@@ -388,10 +620,17 @@ function updateTargetButtons() {
     editSpawnButton.classList.toggle('active-mode', editTarget === 'spawn');
     editSpawnButton.classList.toggle('secondary', editTarget !== 'spawn');
   }
+  if (editPartyButton) {
+    editPartyButton.classList.toggle('active-mode', editTarget === 'party');
+    editPartyButton.classList.toggle('secondary', editTarget !== 'party');
+  }
 
   if (paintPaletteElement) paintPaletteElement.classList.toggle('hidden', editTarget !== 'forest');
   if (friendPaletteElement) friendPaletteElement.classList.toggle('hidden', editTarget !== 'friends');
+  if (partyPaletteElement) partyPaletteElement.classList.toggle('hidden', editTarget !== 'party');
   if (placementEditorElement) placementEditorElement.classList.toggle('hidden', editTarget === 'forest');
+  if (placementScaleRow) placementScaleRow.classList.toggle('hidden', editTarget !== 'party');
+  setPartyPreviewVisible(editTarget === 'party');
 }
 
 function worldFromLayout(item) {
@@ -408,6 +647,8 @@ function updateOutput() {
     outputEl.value = worldPlacementToCode('TIM_PLACEMENT', timPlacement);
   } else if (editTarget === 'spawn') {
     outputEl.value = worldPlacementToCode('PLAYER_START', playerStart);
+  } else if (editTarget === 'party') {
+    outputEl.value = partyLayoutToCode(partyLayout);
   } else {
     outputEl.value = layoutToCode(layout);
   }
@@ -432,6 +673,10 @@ function persistIfAutosave() {
     applyTimPlacementToModel();
   } else if (editTarget === 'spawn') {
     playerStart = savePlayerStart(playerStart);
+  } else if (editTarget === 'party') {
+    partyLayout = savePartyLayout(partyLayout);
+    updatePartyPreview();
+    applyPartyPreviewToModels();
   } else {
     layout = saveForestLayout(layout);
   }
@@ -471,6 +716,16 @@ function getActivePlacementInfo() {
     return { placement: playerStart, label: 'First spawn placement' };
   }
 
+  if (editTarget === 'party') {
+    const index = getEditablePartyIndex();
+    const placement = index >= 0 ? partyLayout[index] : null;
+    const def = placement ? getPartyElementDef(placement.id) : null;
+    return {
+      placement,
+      label: def ? `${def.label} party placement` : 'Party placement'
+    };
+  }
+
   return { placement: null, label: 'Placement' };
 }
 
@@ -488,16 +743,19 @@ function syncPlacementInputs() {
     const degrees = THREE.MathUtils.radToDeg(Number(placement.rotationY) || 0);
     placementRotationInput.value = formatInputNumber(degrees);
   }
+  if (placementScaleInput) placementScaleInput.value = formatInputNumber(placement.scale || 1);
   syncingPlacementInputs = false;
 }
 
 function readPlacementInputs(fallback) {
   const rotationDegrees = Number(placementRotationInput && placementRotationInput.value);
+  const scaleValue = Number(placementScaleInput && placementScaleInput.value);
   return {
     x: Number.isFinite(Number(placementXInput && placementXInput.value)) ? Number(placementXInput.value) : Number(fallback.x) || 0,
     y: Number.isFinite(Number(placementYInput && placementYInput.value)) ? Number(placementYInput.value) : Number(fallback.y) || 0,
     z: Number.isFinite(Number(placementZInput && placementZInput.value)) ? Number(placementZInput.value) : Number(fallback.z) || 0,
-    rotationY: Number.isFinite(rotationDegrees) ? THREE.MathUtils.degToRad(rotationDegrees) : Number(fallback.rotationY) || 0
+    rotationY: Number.isFinite(rotationDegrees) ? THREE.MathUtils.degToRad(rotationDegrees) : Number(fallback.rotationY) || 0,
+    scale: Number.isFinite(scaleValue) ? Math.max(0.2, scaleValue) : Number(fallback.scale) || 1
   };
 }
 
@@ -511,16 +769,28 @@ function applyPlacementInputValues() {
   next.y = Number(next.y.toFixed(1));
   next.z = Number(next.z.toFixed(1));
   next.rotationY = Number(next.rotationY.toFixed(4));
+  next.scale = Number((next.scale || 1).toFixed(2));
+  const worldNext = {
+    x: next.x,
+    y: next.y,
+    z: next.z,
+    rotationY: next.rotationY
+  };
 
   if (editTarget === 'friends') {
     const index = getEditableFriendIndex();
     if (index < 0 || !friendLayout[index]) return;
-    friendLayout[index] = { ...friendLayout[index], ...next };
+    friendLayout[index] = { ...friendLayout[index], ...worldNext };
     selectedFriendIndex = index;
   } else if (editTarget === 'tim') {
-    timPlacement = { ...timPlacement, ...next };
+    timPlacement = { ...timPlacement, ...worldNext };
   } else if (editTarget === 'spawn') {
-    playerStart = { ...playerStart, ...next };
+    playerStart = { ...playerStart, ...worldNext };
+  } else if (editTarget === 'party') {
+    const index = getEditablePartyIndex();
+    if (index < 0 || !partyLayout[index]) return;
+    partyLayout[index] = { ...partyLayout[index], ...next };
+    selectedPartyIndex = index;
   }
 
   syncEditor();
@@ -586,6 +856,53 @@ function refreshMarkers() {
       SPAWN_COLOR,
       Number(playerStart.rotationY) || 0
     );
+    return;
+  }
+
+  if (editTarget === 'party') {
+    partyLayout.forEach((placement, index) => {
+      if (!placement) return;
+      const def = getPartyElementDef(placement.id);
+      const kind = def ? def.kind : 'participant';
+      const color = PARTY_COLORS[kind] || 0xffc247;
+      const selected = index === selectedPartyIndex;
+      const x = Number(placement.x) || 0;
+      const y = Number(placement.y) || 0;
+      const z = Number(placement.z) || 0;
+
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(selected ? 1.15 : 0.86, selected ? 1.52 : 1.18, 28),
+        new THREE.MeshBasicMaterial({
+          color: selected ? 0xffffff : color,
+          transparent: true,
+          opacity: selected ? 0.95 : 0.78,
+          side: THREE.DoubleSide
+        })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(x, y + 0.14, z);
+      markerGroup.add(ring);
+
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(selected ? 0.13 : 0.09, selected ? 0.13 : 0.09, selected ? 1.65 : 1.22, 10),
+        new THREE.MeshBasicMaterial({ color: selected ? 0xffffff : color })
+      );
+      pole.position.set(x, y + (selected ? 0.9 : 0.68), z);
+      markerGroup.add(pole);
+
+      const direction = new THREE.Vector3(0, 0, -1)
+        .applyAxisAngle(new THREE.Vector3(0, 1, 0), Number(placement.rotationY) || 0)
+        .normalize();
+      const arrow = new THREE.ArrowHelper(
+        direction,
+        new THREE.Vector3(x, y + 1.75, z),
+        1.9 * getPlacementScale(placement),
+        selected ? 0xffffff : color,
+        0.45,
+        0.28
+      );
+      markerGroup.add(arrow);
+    });
     return;
   }
 
@@ -726,10 +1043,35 @@ function syncSpawn(statusOverride = '') {
   setStatus(`First spawn at x ${Number(playerStart.x || 0).toFixed(1)}, y ${Number(playerStart.y || 0).toFixed(1)}, z ${Number(playerStart.z || 0).toFixed(1)}. Click the map to move it.`);
 }
 
+function syncParty(statusOverride = '') {
+  persistIfAutosave();
+  updatePartyPreview();
+  applyPartyPreviewToModels();
+  updateOutput();
+  refreshMarkers();
+  syncPlacementInputs();
+
+  if (statusOverride) {
+    setStatus(statusOverride);
+    return;
+  }
+
+  const index = getEditablePartyIndex();
+  const placement = index >= 0 ? partyLayout[index] : null;
+  const def = placement ? getPartyElementDef(placement.id) : null;
+  const label = def ? def.label : 'Party item';
+  if (placement) {
+    setStatus(`${label} at x ${Number(placement.x || 0).toFixed(1)}, y ${Number(placement.y || 0).toFixed(1)}, z ${Number(placement.z || 0).toFixed(1)}, rot ${Number(placement.rotationY || 0).toFixed(2)}, scale ${Number(placement.scale || 1).toFixed(2)}.`);
+  } else {
+    setStatus('Party mode. Pick a party item, then click or drag it into place.');
+  }
+}
+
 function syncEditor(statusOverride = '') {
   if (editTarget === 'friends') syncFriends(statusOverride);
   else if (editTarget === 'tim') syncTim(statusOverride);
   else if (editTarget === 'spawn') syncSpawn(statusOverride);
+  else if (editTarget === 'party') syncParty(statusOverride);
   else syncForest(statusOverride);
 }
 
@@ -806,6 +1148,7 @@ function setEditorMode(mode) {
   editorMode = mode === 'select' ? 'select' : 'paint';
   if (editorMode === 'paint') {
     if (editTarget === 'friends') selectedFriendIndex = -1;
+    else if (editTarget === 'party') selectedPartyIndex = -1;
     else selectedIndex = -1;
   }
   updateModeButtons();
@@ -826,12 +1169,26 @@ function setPaintFriendId(friendId) {
   syncEditor();
 }
 
+function setPaintPartyId(partyId) {
+  const id = String(partyId || '');
+  if (!PARTY_ELEMENT_DEFS.some((def) => def.id === id)) return;
+  paintPartyId = id;
+  selectedPartyIndex = partyLayout.findIndex((placement) => placement && placement.id === id);
+  updatePartyPaletteButtons();
+  syncEditor();
+}
+
 function setEditTarget(target) {
-  if (target === 'friends' || target === 'tim' || target === 'spawn') editTarget = target;
+  const previousTarget = editTarget;
+  if (target === 'friends' || target === 'tim' || target === 'spawn' || target === 'party') editTarget = target;
   else editTarget = 'forest';
   isPainting = false;
   lastPaintPoint = null;
   pointerDown = null;
+  if (previousTarget === 'party' && editTarget !== 'party') {
+    applyFriendPlacementsToModels();
+    applyTimPlacementToModel();
+  }
   updateTargetButtons();
   syncEditor();
 }
@@ -932,11 +1289,81 @@ function rotatePlayerStart() {
   syncEditor();
 }
 
+function findNearestPartyIndex(worldX, worldZ) {
+  let nearestIndex = -1;
+  let nearestDistSq = Infinity;
+
+  partyLayout.forEach((placement, index) => {
+    if (!placement) return;
+    const dx = worldX - placement.x;
+    const dz = worldZ - placement.z;
+    const distSq = dx * dx + dz * dz;
+    const radius = PARTY_SELECT_RADIUS * getPlacementScale(placement);
+    const radiusSq = radius * radius;
+    if (distSq <= radiusSq && distSq < nearestDistSq) {
+      nearestDistSq = distSq;
+      nearestIndex = index;
+    }
+  });
+
+  return nearestIndex;
+}
+
+function setPartyAtIndex(index, worldX, worldZ) {
+  if (index < 0 || index >= partyLayout.length || !partyLayout[index]) return;
+  partyLayout[index] = {
+    ...partyLayout[index],
+    x: Number(worldX.toFixed(1)),
+    z: Number(worldZ.toFixed(1))
+  };
+  syncEditor();
+}
+
+function setPartyById(partyId, worldX, worldZ) {
+  const index = partyLayout.findIndex((placement) => placement && placement.id === partyId);
+  if (index < 0) return;
+  selectedPartyIndex = index;
+  setPartyAtIndex(index, worldX, worldZ);
+}
+
+function moveSelectedParty(worldX, worldZ) {
+  if (selectedPartyIndex < 0) return;
+  setPartyAtIndex(selectedPartyIndex, worldX, worldZ);
+}
+
+function resetPartyAtIndex(index) {
+  if (index < 0 || index >= partyLayout.length || !partyLayout[index]) return;
+  const defaults = getDefaultPartyLayout();
+  const id = partyLayout[index].id;
+  const fallback = defaults.find((placement) => placement.id === id);
+  if (!fallback) return;
+  partyLayout[index] = { ...fallback };
+  selectedPartyIndex = index;
+  syncEditor('Party item reset to default placement.');
+}
+
+function rotateSelectedParty() {
+  const index = getEditablePartyIndex();
+  if (index < 0 || !partyLayout[index]) return;
+  const rotationStep = THREE.MathUtils.degToRad(Number(rotationStepInput.value) || 15);
+  partyLayout[index] = {
+    ...partyLayout[index],
+    rotationY: Number(((partyLayout[index].rotationY || 0) + rotationStep).toFixed(4))
+  };
+  selectedPartyIndex = index;
+  syncEditor();
+}
+
 function maybePaintFriend(point) {
   if (!point) return;
   const index = friendLayout.findIndex((p) => p && p.id === paintFriendId);
   if (index >= 0) selectedFriendIndex = index;
   setFriendById(paintFriendId, point.x, point.z);
+}
+
+function maybePaintParty(point) {
+  if (!point) return;
+  setPartyById(paintPartyId, point.x, point.z);
 }
 
 function maybePaintSingletonPlacement(point) {
@@ -977,6 +1404,8 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   const point = intersectGround(event);
   if (editTarget === 'friends') {
     maybePaintFriend(point);
+  } else if (editTarget === 'party') {
+    maybePaintParty(point);
   } else if (editTarget === 'tim' || editTarget === 'spawn') {
     maybePaintSingletonPlacement(point);
   } else {
@@ -989,6 +1418,8 @@ renderer.domElement.addEventListener('pointermove', (event) => {
   const point = intersectGround(event);
   if (editTarget === 'friends') {
     maybePaintFriend(point);
+  } else if (editTarget === 'party') {
+    maybePaintParty(point);
   } else if (editTarget === 'tim' || editTarget === 'spawn') {
     maybePaintSingletonPlacement(point);
   } else {
@@ -1041,6 +1472,32 @@ renderer.domElement.addEventListener('pointerup', (event) => {
     return;
   }
 
+  if (editTarget === 'party') {
+    const nearestPartyIndex = findNearestPartyIndex(point.x, point.z);
+
+    if (event.shiftKey) {
+      if (nearestPartyIndex >= 0) resetPartyAtIndex(nearestPartyIndex);
+      return;
+    }
+
+    if (nearestPartyIndex >= 0) {
+      selectedPartyIndex = nearestPartyIndex;
+      const placement = partyLayout[selectedPartyIndex];
+      if (placement) paintPartyId = placement.id;
+      updatePartyPaletteButtons();
+      syncEditor();
+      return;
+    }
+
+    if (selectedPartyIndex >= 0) {
+      moveSelectedParty(point.x, point.z);
+      return;
+    }
+
+    setStatus('Select a party item first, then click elsewhere to move it.');
+    return;
+  }
+
   const nearestIndex = findNearestItemIndex(point.x, point.z);
 
   if (event.shiftKey) {
@@ -1073,9 +1530,11 @@ window.addEventListener('keydown', (event) => {
     if (editTarget === 'friends') rotateSelectedFriend();
     else if (editTarget === 'tim') rotateTim();
     else if (editTarget === 'spawn') rotatePlayerStart();
+    else if (editTarget === 'party') rotateSelectedParty();
     else rotateSelectedItem();
   } else if (event.code === 'Escape') {
     if (editTarget === 'friends') selectedFriendIndex = -1;
+    else if (editTarget === 'party') selectedPartyIndex = -1;
     else selectedIndex = -1;
     syncEditor();
   } else if (event.code === 'KeyP') {
@@ -1090,6 +1549,7 @@ if (editForestButton) editForestButton.addEventListener('click', () => setEditTa
 if (editFriendsButton) editFriendsButton.addEventListener('click', () => setEditTarget('friends'));
 if (editTimButton) editTimButton.addEventListener('click', () => setEditTarget('tim'));
 if (editSpawnButton) editSpawnButton.addEventListener('click', () => setEditTarget('spawn'));
+if (editPartyButton) editPartyButton.addEventListener('click', () => setEditTarget('party'));
 paintModeButton.addEventListener('click', () => setEditorMode('paint'));
 selectModeButton.addEventListener('click', () => setEditorMode('select'));
 paletteButtons.forEach((button) => {
@@ -1098,7 +1558,10 @@ paletteButtons.forEach((button) => {
 friendPaletteButtons.forEach((button) => {
   button.addEventListener('click', () => setPaintFriendId(button.dataset.friendId || 'friend1'));
 });
-[placementXInput, placementYInput, placementZInput, placementRotationInput].forEach((input) => {
+partyPaletteButtons.forEach((button) => {
+  button.addEventListener('click', () => setPaintPartyId(button.dataset.partyId || 'table'));
+});
+[placementXInput, placementYInput, placementZInput, placementRotationInput, placementScaleInput].forEach((input) => {
   if (!input) return;
   input.addEventListener('input', applyPlacementInputValues);
 });
@@ -1116,6 +1579,11 @@ autosaveToggle.addEventListener('change', () => {
     } else if (editTarget === 'spawn') {
       playerStart = savePlayerStart(playerStart);
       setStatus('Auto-save is on. First spawn will update the map live.');
+    } else if (editTarget === 'party') {
+      partyLayout = savePartyLayout(partyLayout);
+      updatePartyPreview();
+      applyPartyPreviewToModels();
+      setStatus('Auto-save is on. Party placements will update the map live.');
     } else {
       layout = saveForestLayout(layout);
       setStatus('Auto-save is on. New edits will update the map live.');
@@ -1149,6 +1617,15 @@ saveButton.addEventListener('click', () => {
     return;
   }
 
+  if (editTarget === 'party') {
+    partyLayout = savePartyLayout(partyLayout);
+    updatePartyPreview();
+    applyPartyPreviewToModels();
+    updateOutput();
+    setStatus('Saved party layout to the map.');
+    return;
+  }
+
   layout = saveForestLayout(layout);
   forestController.setLayout(layout);
   updateOutput();
@@ -1162,7 +1639,9 @@ copyButton.addEventListener('click', async () => {
       ? worldPlacementToCode('TIM_PLACEMENT', timPlacement)
       : editTarget === 'spawn'
         ? worldPlacementToCode('PLAYER_START', playerStart)
-        : layoutToCode(layout);
+        : editTarget === 'party'
+          ? partyLayoutToCode(partyLayout)
+          : layoutToCode(layout);
   try {
     await navigator.clipboard.writeText(text);
     setStatus(editTarget === 'friends'
@@ -1171,7 +1650,9 @@ copyButton.addEventListener('click', async () => {
         ? 'Tim placement code copied to clipboard.'
         : editTarget === 'spawn'
           ? 'First spawn code copied to clipboard.'
-          : 'Forest layout code copied to clipboard.');
+          : editTarget === 'party'
+            ? 'Party layout code copied to clipboard.'
+            : 'Forest layout code copied to clipboard.');
   } catch (e) {
     outputEl.focus();
     outputEl.select();
@@ -1202,6 +1683,16 @@ deleteSelectedButton.addEventListener('click', () => {
     return;
   }
 
+  if (editTarget === 'party') {
+    const index = getEditablePartyIndex();
+    if (index < 0 || !partyLayout[index]) {
+      setStatus('Select a party item first, then use Delete Selected to reset it.');
+      return;
+    }
+    resetPartyAtIndex(index);
+    return;
+  }
+
   if (selectedIndex < 0 || !layout[selectedIndex]) {
     setStatus('Select an item first, then use Delete Selected.');
     return;
@@ -1228,6 +1719,13 @@ resetButton.addEventListener('click', () => {
   if (editTarget === 'spawn') {
     playerStart = getDefaultPlayerStart();
     syncEditor('Reset to the default first spawn.');
+    return;
+  }
+
+  if (editTarget === 'party') {
+    partyLayout = getDefaultPartyLayout();
+    selectedPartyIndex = -1;
+    syncEditor('Reset to the default party layout.');
     return;
   }
 
@@ -1261,6 +1759,14 @@ clearSavedButton.addEventListener('click', () => {
     return;
   }
 
+  if (editTarget === 'party') {
+    clearPartyLayout();
+    partyLayout = getDefaultPartyLayout();
+    selectedPartyIndex = -1;
+    syncEditor('Saved override cleared. Party layout is back to default.');
+    return;
+  }
+
   clearForestLayout();
   setStatus('Saved override cleared. The live map will now fall back to the code layout.');
 });
@@ -1284,6 +1790,7 @@ updateRotationLabel();
 updateModeButtons();
 updatePaletteButtons();
 updateFriendPaletteButtons();
+updatePartyPaletteButtons();
 updateTargetButtons();
 setEditTarget('forest');
 animate();

@@ -11,6 +11,15 @@ import {
   loadPlayerStart,
   loadTimPlacement
 } from './friends.js';
+import {
+  PARK_CENTER_X,
+  PARK_CENTER_Z,
+  PARTY_BALLOON_IDS,
+  PARTY_CENTER_X,
+  PARTY_CENTER_Z,
+  getPartyPlacement,
+  loadPartyLayout
+} from './party.js';
 
 // Scene & renderer
 const container = document.getElementById('canvas-container') || document.body;
@@ -215,10 +224,19 @@ function savePercentage(storageKey, percentage) {
 
 const QUEST_FIND_BIRTHDAY_BOY = 'Find the Birthday Boy';
 const QUEST_FIND_FRIENDS = "Find Tim's friends";
+const QUEST_RETURN_TO_TIM = 'Return to Tim';
+const QUEST_PARTY_COMPLETE = 'Happy Birthday, Tim!';
+
+const PARTY_CENTER = new THREE.Vector3(PARTY_CENTER_X, 0, PARTY_CENTER_Z);
 
 const timDialogueLines = [
   'Hello! My name is Tim and today is my birthday! I heard you could help me find my friends!',
   "I'm inviting five friends to my birthday party! Find them all and then meet me here in the park!"
+];
+
+const timPartyDialogueLines = [
+  'It looks like you have found all my friends!',
+  "It's time for the party!"
 ];
 
 let unlockedFriendIds = new Set();
@@ -227,6 +245,16 @@ let initialQuestSoundPlayed = false;
 let activeDialogue = null;
 let activeDialogueIndex = -1;
 let timDialogueCompleted = false;
+let partyCutsceneStarted = false;
+let partyLayout = loadPartyLayout();
+const partyCutsceneState = {
+  active: false,
+  transitioning: false,
+  startedAt: 0,
+  duration: 9.5,
+  center: PARTY_CENTER.clone().setY(0.9),
+  cameraTarget: PARTY_CENTER.clone().setY(1.0)
+};
 
 function playButtonClickSound() {
   try {
@@ -260,6 +288,16 @@ function setQuest(text, { playSound = true } = {}) {
   currentQuest = text;
   if (questMainTextElement) questMainTextElement.textContent = text;
   if (playSound) playNewQuestSound();
+}
+
+function allFriendsFound() {
+  return FRIEND_DEFS.length > 0 && unlockedFriendIds.size >= FRIEND_DEFS.length;
+}
+
+function getProgressQuest() {
+  if (!timDialogueCompleted) return QUEST_FIND_BIRTHDAY_BOY;
+  if (partyCutsceneStarted) return QUEST_PARTY_COMPLETE;
+  return allFriendsFound() ? QUEST_RETURN_TO_TIM : QUEST_FIND_FRIENDS;
 }
 
 
@@ -371,6 +409,10 @@ function unlockFriend(friendId) {
     showWeatherUnlockToast(def.weatherLabel);
   }
 
+  if (allFriendsFound()) {
+    setQuest(QUEST_RETURN_TO_TIM, { playSound: true });
+  }
+
   return true;
 }
 
@@ -466,7 +508,7 @@ function renderFriendsPanel() {
 function setupInterface() {
   if (chatBubbleElement) chatBubbleElement.classList.add('hidden');
   hidePauseOverlay();
-  setQuest(timDialogueCompleted ? QUEST_FIND_FRIENDS : QUEST_FIND_BIRTHDAY_BOY, { playSound: false });
+  setQuest(getProgressQuest(), { playSound: false });
   renderFriendsPanel();
   syncWeatherUnlockUI();
 
@@ -725,6 +767,11 @@ function initPointerLock() {
 
   // movement update called from animate
   function updateMovement(delta) {
+    if (activeDialogue || dialogueFocusState.active || partyCutsceneState.active || partyCutsceneState.transitioning) {
+      velocity.set(0, 0, 0);
+      return;
+    }
+
     const sprintMultiplier = moveState.sprint ? 1.9 : 1;
     const speed = 15.0 * sprintMultiplier; // units/sec
     const accel = 50.0 * sprintMultiplier;
@@ -956,8 +1003,8 @@ ground.receiveShadow = true;
 scene.add(ground);
 
 // create zones placed around the map
-createGardenZone(scene, -18, 12);
-const forestZone = createForestZone(scene, -18, 12);
+createGardenZone(scene, PARK_CENTER_X, PARK_CENTER_Z);
+const forestZone = createForestZone(scene, PARK_CENTER_X, PARK_CENTER_Z);
 
 createCityZone(scene, 22, -4);
 const beachZone = createBeachZone(scene, 0, 12);
@@ -1225,6 +1272,7 @@ function loadFriendModel(friendLoader, def, placement) {
 
     enableShadows(friend);
     const box = scaleModelToHeight(friend, def.desiredHeight);
+    friend.userData.baseScale = friend.scale.x;
     placeModelOnGround(friend, box);
     friend.userData.groundY = friend.position.y;
     smoothModelShading(friend);
@@ -1252,6 +1300,7 @@ loader.load('./models/Friends/birthday_boy.glb', (gltf) => {
   enableShadows(actor);
   const desiredHeight = 1.2;
   const box = scaleModelToHeight(actor, desiredHeight);
+  actor.userData.baseScale = actor.scale.x;
   placeModelOnGround(actor, box);
   actor.userData.groundY = actor.position.y;
   const timPlacement = loadTimPlacement();
@@ -1294,6 +1343,207 @@ loader.load('./models/Friends/birthday_boy.glb', (gltf) => {
 const INTERACT_DISTANCE = 2.0; // units
 const FACING_DOT_THRESHOLD = 0.60; // cosine of acceptable facing angle (~53deg)
 const interactHint = document.getElementById('interact-hint');
+const dialogueFocusLooker = new THREE.Object3D();
+const dialogueFocusPoint = new THREE.Vector3();
+const dialogueFocusBox = new THREE.Box3();
+const dialogueFocusSize = new THREE.Vector3();
+const dialogueFocusDirection = new THREE.Vector3();
+const dialogueCameraUp = new THREE.Vector3(0, 1, 0);
+const dialogueCameraSide = new THREE.Vector3();
+const dialogueCameraWorldPosition = new THREE.Vector3();
+const dialogueCameraParentQuaternion = new THREE.Quaternion();
+const dialogueCameraLocalTargetQuaternion = new THREE.Quaternion();
+const dialogueFocusState = {
+  active: false,
+  returning: false,
+  target: null,
+  restoreQuaternion: new THREE.Quaternion(),
+  targetQuaternion: new THREE.Quaternion(),
+  restorePosition: new THREE.Vector3(),
+  targetPosition: new THREE.Vector3(),
+  anchorPosition: new THREE.Vector3(),
+  restorePointerSpeed: null,
+  pointerLookDisabled: false
+};
+
+const DIALOGUE_CAMERA_MIN_DISTANCE = 1.8;
+const DIALOGUE_CAMERA_MAX_DISTANCE = 2.8;
+const DIALOGUE_CAMERA_DISTANCE = 3.1;
+const DIALOGUE_CAMERA_SIDE_OFFSET = 0.35;
+const DIALOGUE_CAMERA_HEIGHT_OFFSET = 0.05;
+
+function getCameraControlObject() {
+  return (controls && controls.getObject) ? controls.getObject() : camera;
+}
+
+function restoreDialoguePointerSpeed() {
+  if (dialogueFocusState.restorePointerSpeed === null) return;
+  if (controls && typeof controls.pointerSpeed === 'number') {
+    controls.pointerSpeed = dialogueFocusState.restorePointerSpeed;
+  }
+  dialogueFocusState.restorePointerSpeed = null;
+}
+
+function setPointerLookEnabled(enabled) {
+  if (!controls || !controls.domElement || !controls._onMouseMove) return;
+  const ownerDoc = controls.domElement.ownerDocument;
+  if (!ownerDoc) return;
+  if (enabled) {
+    if (dialogueFocusState.pointerLookDisabled) {
+      ownerDoc.addEventListener('mousemove', controls._onMouseMove);
+      dialogueFocusState.pointerLookDisabled = false;
+    }
+  } else if (!dialogueFocusState.pointerLookDisabled) {
+    ownerDoc.removeEventListener('mousemove', controls._onMouseMove);
+    dialogueFocusState.pointerLookDisabled = true;
+  }
+}
+
+function computeDialogueCameraPose(targetObject, anchorPosition, outPosition, outQuaternion) {
+  if (!targetObject) return false;
+  const focusPoint = getObjectFocusPoint(targetObject);
+  dialogueFocusDirection.copy(focusPoint).sub(anchorPosition);
+  const distance = dialogueFocusDirection.length();
+  if (distance < 0.001) {
+    camera.getWorldDirection(dialogueFocusDirection);
+    if (dialogueFocusDirection.lengthSq() < 0.0001) {
+      dialogueFocusDirection.set(0, 0, -1);
+    }
+  } else {
+    dialogueFocusDirection.normalize();
+  }
+
+  dialogueCameraSide.copy(dialogueFocusDirection).cross(dialogueCameraUp);
+  if (dialogueCameraSide.lengthSq() < 0.0001) {
+    dialogueCameraSide.set(1, 0, 0);
+  } else {
+    dialogueCameraSide.normalize();
+  }
+
+  const desiredDistance = THREE.MathUtils.clamp(DIALOGUE_CAMERA_DISTANCE, DIALOGUE_CAMERA_MIN_DISTANCE, DIALOGUE_CAMERA_MAX_DISTANCE);
+  outPosition.copy(focusPoint)
+    .addScaledVector(dialogueFocusDirection, -desiredDistance)
+    .addScaledVector(dialogueCameraSide, DIALOGUE_CAMERA_SIDE_OFFSET);
+  outPosition.y = anchorPosition.y + DIALOGUE_CAMERA_HEIGHT_OFFSET;
+
+  lookQuaternionAt(outPosition, focusPoint, outQuaternion);
+  return true;
+}
+
+function getDialogueTarget(dialogueKey) {
+  if (dialogueKey === 'tim-intro' || dialogueKey === 'tim-party') return actor || null;
+  return friendActorsById.get(dialogueKey) || null;
+}
+
+function getObjectFocusPoint(object, target = dialogueFocusPoint) {
+  if (!object) return target.set(0, PLAYER_HEIGHT, 0);
+  object.updateMatrixWorld(true);
+  dialogueFocusBox.setFromObject(object);
+  if (
+    Number.isFinite(dialogueFocusBox.min.x) &&
+    Number.isFinite(dialogueFocusBox.max.x) &&
+    dialogueFocusBox.max.y > dialogueFocusBox.min.y
+  ) {
+    dialogueFocusBox.getSize(dialogueFocusSize);
+    dialogueFocusBox.getCenter(target);
+    target.y = dialogueFocusBox.min.y + dialogueFocusSize.y * 0.72;
+    return target;
+  }
+
+  object.getWorldPosition(target);
+  target.y += 0.85;
+  return target;
+}
+
+function lookQuaternionAt(fromPosition, targetPosition, outQuaternion) {
+  dialogueFocusLooker.position.copy(fromPosition);
+  dialogueFocusLooker.lookAt(targetPosition);
+  outQuaternion.copy(dialogueFocusLooker.quaternion);
+  return outQuaternion;
+}
+
+function getCameraLocalLookQuaternion(targetPosition, outQuaternion) {
+  camera.updateMatrixWorld(true);
+  camera.getWorldPosition(dialogueCameraWorldPosition);
+  lookQuaternionAt(dialogueCameraWorldPosition, targetPosition, outQuaternion);
+
+  if (camera.parent) {
+    camera.parent.getWorldQuaternion(dialogueCameraParentQuaternion).invert();
+    outQuaternion.premultiply(dialogueCameraParentQuaternion);
+  }
+
+  return outQuaternion;
+}
+
+function startDialogueFocus(targetObject) {
+  const focusTarget = targetObject || null;
+  if (!focusTarget) return;
+  dialogueFocusState.active = true;
+  dialogueFocusState.returning = false;
+  dialogueFocusState.target = focusTarget;
+  const camObj = getCameraControlObject();
+  dialogueFocusState.restorePosition.copy(camObj.position);
+  dialogueFocusState.anchorPosition.copy(camObj.position);
+  dialogueFocusState.restoreQuaternion.copy(camera.quaternion);
+  computeDialogueCameraPose(
+    focusTarget,
+    dialogueFocusState.anchorPosition,
+    dialogueFocusState.targetPosition,
+    dialogueFocusState.targetQuaternion
+  );
+  if (controls && typeof controls.pointerSpeed === 'number') {
+    dialogueFocusState.restorePointerSpeed = controls.pointerSpeed;
+    controls.pointerSpeed = 0;
+  }
+  setPointerLookEnabled(false);
+}
+
+function finishDialogueFocus({ restore = true } = {}) {
+  if (!dialogueFocusState.active) return;
+  dialogueFocusState.target = null;
+  if (restore) {
+    dialogueFocusState.returning = true;
+  } else {
+    dialogueFocusState.active = false;
+    dialogueFocusState.returning = false;
+    restoreDialoguePointerSpeed();
+    setPointerLookEnabled(true);
+  }
+}
+
+function updateDialogueCameraFocus(dt) {
+  if (!dialogueFocusState.active) return;
+  const blend = Math.min(1, Math.max(0.08, dt * 6.5));
+
+  if (dialogueFocusState.returning) {
+    camera.position.lerp(dialogueFocusState.restorePosition, blend);
+    camera.quaternion.slerp(dialogueFocusState.restoreQuaternion, blend);
+    if (
+      camera.quaternion.angleTo(dialogueFocusState.restoreQuaternion) < 0.006 &&
+      camera.position.distanceToSquared(dialogueFocusState.restorePosition) < 0.0001
+    ) {
+      camera.position.copy(dialogueFocusState.restorePosition);
+      camera.quaternion.copy(dialogueFocusState.restoreQuaternion);
+      dialogueFocusState.active = false;
+      dialogueFocusState.returning = false;
+      restoreDialoguePointerSpeed();
+      setPointerLookEnabled(true);
+    }
+    return;
+  }
+
+  if (!dialogueFocusState.target) return;
+  if (!computeDialogueCameraPose(
+    dialogueFocusState.target,
+    dialogueFocusState.anchorPosition,
+    dialogueFocusState.targetPosition,
+    dialogueFocusState.targetQuaternion
+  )) {
+    return;
+  }
+  camera.position.lerp(dialogueFocusState.targetPosition, blend);
+  camera.quaternion.slerp(dialogueFocusState.targetQuaternion, blend);
+}
 
 function getDialogueConfig(dialogueKey) {
   if (dialogueKey === 'tim-intro') {
@@ -1303,7 +1553,18 @@ function getDialogueConfig(dialogueKey) {
       image: 'images/boy1.png',
       onComplete: () => {
         setTimDialogueCompleted(true);
-        setQuest(QUEST_FIND_FRIENDS, { playSound: true });
+        setQuest(getProgressQuest(), { playSound: true });
+      }
+    };
+  }
+
+  if (dialogueKey === 'tim-party') {
+    return {
+      lines: timPartyDialogueLines,
+      speaker: 'Tim',
+      image: 'images/boy1.png',
+      onComplete: () => {
+        startFinalPartyCutscene();
       }
     };
   }
@@ -1327,6 +1588,7 @@ function startDialogue(dialogueKey) {
   activeDialogue = dialogueKey;
   activeDialogueIndex = 0;
   showChatBubble(cfg.lines[activeDialogueIndex], 0, cfg.image, cfg.speaker);
+  startDialogueFocus(getDialogueTarget(dialogueKey));
   return true;
 }
 
@@ -1345,6 +1607,7 @@ document.addEventListener('keydown', (ev) => {
       if (!cfg) {
         activeDialogue = null;
         activeDialogueIndex = -1;
+        finishDialogueFocus();
         if (chatBubbleElement) chatBubbleElement.classList.add('hidden');
         return;
       }
@@ -1359,8 +1622,10 @@ document.addEventListener('keydown', (ev) => {
           chatBubbleElement.classList.add('hidden');
           chatBubbleElement.innerHTML = '';
         }
+        const completedDialogueKey = activeDialogue;
         activeDialogue = null;
         activeDialogueIndex = -1;
+        finishDialogueFocus({ restore: completedDialogueKey !== 'tim-party' });
         if (typeof cfg.onComplete === 'function') cfg.onComplete();
       }
       return;
@@ -1383,7 +1648,10 @@ document.addEventListener('keydown', (ev) => {
       .normalize();
 
     // 1) Tim
-    if (actor && !timDialogueCompleted) {
+    const timDialogueKey = !timDialogueCompleted
+      ? 'tim-intro'
+      : (allFriendsFound() && !partyCutsceneStarted ? 'tim-party' : null);
+    if (actor && timDialogueKey) {
       const actorPos = new THREE.Vector3();
       actor.getWorldPosition(actorPos);
       const d = actorPos.distanceTo(playerPos);
@@ -1391,7 +1659,7 @@ document.addEventListener('keydown', (ev) => {
         const toActor = actorPos.clone().sub(playerPos).setY(0).normalize();
         const dot = forward.dot(toActor);
         if (dot >= FACING_DOT_THRESHOLD) {
-          startDialogue('tim-intro');
+          startDialogue(timDialogueKey);
           return;
         }
       }
@@ -1448,6 +1716,349 @@ function showChatBubble(text = '', duration = 4000, imageSrc = 'images/boy1.png'
   clearTimeout(bubble._hideTO);
   if (duration > 0) bubble._hideTO = setTimeout(() => bubble.classList.add('hidden'), duration);
 }
+
+let partySceneGroup = null;
+let partyCake = null;
+let partyCakeLoadStarted = false;
+let partyFallbackCake = null;
+const partyCameraPos = new THREE.Vector3();
+const partyLookTarget = new THREE.Vector3();
+const partyOffsetVector = new THREE.Vector3();
+
+function getCurrentPartyPlacement(id) {
+  return getPartyPlacement(partyLayout, id);
+}
+
+function getPlacementScale(placement) {
+  return Math.max(0.2, Number(placement && placement.scale) || 1);
+}
+
+function getModelBaseScale(model) {
+  return Number(model && model.userData && model.userData.baseScale) || Number(model && model.scale && model.scale.x) || 1;
+}
+
+function setRelativePartyPosition(object, placement, localX, localY, localZ) {
+  partyOffsetVector.set(localX, 0, localZ).applyAxisAngle(new THREE.Vector3(0, 1, 0), Number(placement.rotationY) || 0);
+  object.position.set(
+    placement.x + partyOffsetVector.x,
+    placement.y + localY,
+    placement.z + partyOffsetVector.z
+  );
+}
+
+function createPartyFallbackCake() {
+  const cake = new THREE.Group();
+  cake.name = 'fallback-birthday-cake';
+
+  const cakeMat = new THREE.MeshStandardMaterial({ color: 0xffb8d8, roughness: 0.7, metalness: 0.02 });
+  const icingMat = new THREE.MeshStandardMaterial({ color: 0xfff4fb, roughness: 0.62, metalness: 0.01 });
+  const candleMat = new THREE.MeshStandardMaterial({ color: 0x5bc7ff, roughness: 0.5, metalness: 0.02 });
+  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffc94f });
+
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.22, 40), cakeMat);
+  base.position.y = 0.11;
+  const icing = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.055, 40), icingMat);
+  icing.position.y = 0.245;
+  cake.add(base, icing);
+
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2;
+    const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.19, 10), candleMat);
+    candle.position.set(Math.sin(angle) * 0.2, 0.36, Math.cos(angle) * 0.2);
+    const flame = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), flameMat);
+    flame.position.set(candle.position.x, 0.49, candle.position.z);
+    flame.scale.y = 1.45;
+    cake.add(candle, flame);
+  }
+
+  cake.traverse((node) => {
+    node.userData.noAutoCollision = true;
+    if (node.isMesh) {
+      node.castShadow = true;
+      node.receiveShadow = true;
+    }
+  });
+
+  cake.userData.baseScale = 1;
+  return cake;
+}
+
+function attachPartyCake() {
+  if (!partySceneGroup) return;
+  const cake = partyCake || partyFallbackCake;
+  if (!cake) return;
+  const tablePlacement = getCurrentPartyPlacement('table');
+  if (!tablePlacement) return;
+  const tableScale = getPlacementScale(tablePlacement);
+  const baseScale = getModelBaseScale(cake);
+  if (cake.parent !== partySceneGroup) partySceneGroup.add(cake);
+  cake.position.set(tablePlacement.x, tablePlacement.y, tablePlacement.z);
+  cake.rotation.y = (Number(tablePlacement.rotationY) || 0) + Math.PI * 0.12;
+  cake.scale.setScalar(baseScale * tableScale);
+  cake.visible = true;
+}
+
+function loadPartyCake() {
+  if (partyCakeLoadStarted) return;
+  partyCakeLoadStarted = true;
+
+  const cakeLoader = new GLTFLoader();
+  cakeLoader.load('./models/cake.glb', (gltf) => {
+    partyCake = gltf.scene;
+    partyCake.name = 'party-cake';
+    enableShadows(partyCake);
+    const box = scaleModelToHeight(partyCake, 0.72);
+    partyCake.userData.baseScale = partyCake.scale.x;
+    placeModelOnGround(partyCake, box);
+    smoothModelShading(partyCake);
+    partyCake.userData.noCollision = true;
+    partyCake.traverse((node) => {
+      node.userData.noAutoCollision = true;
+    });
+    attachPartyCake();
+  }, undefined, (err) => {
+    console.warn('Failed to load cake.glb, using fallback cake', err);
+    partyFallbackCake = createPartyFallbackCake();
+    attachPartyCake();
+  });
+}
+
+function createPartyScene() {
+  if (partySceneGroup) return partySceneGroup;
+
+  const tablePlacement = getCurrentPartyPlacement('table') || {
+    x: PARTY_CENTER.x,
+    y: 0,
+    z: PARTY_CENTER.z,
+    rotationY: 0,
+    scale: 1
+  };
+  const tableScale = getPlacementScale(tablePlacement);
+
+  partySceneGroup = new THREE.Group();
+  partySceneGroup.name = 'birthday-party-scene';
+  partySceneGroup.position.set(0, 0, 0);
+  partySceneGroup.userData.noCollision = true;
+  partySceneGroup.userData.confetti = [];
+  partySceneGroup.userData.balloons = [];
+  scene.add(partySceneGroup);
+
+  const colors = [0xff4f9d, 0xffcf42, 0x63d7ff, 0x7fe06f, 0xb26cff, 0xff7b54];
+  const balloonMatCache = colors.map((color) => new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.38,
+    metalness: 0.02,
+    emissive: new THREE.Color(color).multiplyScalar(0.04)
+  }));
+  const stringMat = new THREE.MeshStandardMaterial({ color: 0xf7e8c7, roughness: 0.9, metalness: 0.01 });
+
+  for (let cluster = 0; cluster < PARTY_BALLOON_IDS.length; cluster++) {
+    const clusterPlacement = getCurrentPartyPlacement(PARTY_BALLOON_IDS[cluster]);
+    if (!clusterPlacement) continue;
+    const clusterScale = getPlacementScale(clusterPlacement);
+
+    for (let j = 0; j < 3; j++) {
+      const balloon = new THREE.Mesh(new THREE.SphereGeometry(0.22, 18, 16), balloonMatCache[(cluster + j) % balloonMatCache.length]);
+      balloon.position.set(
+        clusterPlacement.x + (j - 1) * 0.18 * clusterScale,
+        clusterPlacement.y + (2.25 + j * 0.18) * clusterScale,
+        clusterPlacement.z + Math.sin(j * 1.7) * 0.16 * clusterScale
+      );
+      balloon.scale.set(clusterScale, 1.18 * clusterScale, clusterScale);
+      balloon.rotation.y = Number(clusterPlacement.rotationY) || 0;
+      balloon.castShadow = true;
+      balloon.userData.baseY = balloon.position.y;
+      balloon.userData.phase = cluster * 1.4 + j * 0.9;
+      partySceneGroup.add(balloon);
+      partySceneGroup.userData.balloons.push(balloon);
+
+      const string = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.2, 6), stringMat);
+      string.position.set(balloon.position.x, balloon.position.y - 0.74, balloon.position.z);
+      string.scale.setScalar(clusterScale);
+      string.castShadow = false;
+      partySceneGroup.add(string);
+    }
+  }
+
+  const confettiGeo = new THREE.BoxGeometry(0.055, 0.014, 0.022);
+  for (let i = 0; i < 90; i++) {
+    const confettiMat = new THREE.MeshBasicMaterial({ color: colors[i % colors.length] });
+    const confetti = new THREE.Mesh(confettiGeo, confettiMat);
+    confetti.position.set(
+      tablePlacement.x + THREE.MathUtils.randFloatSpread(5.4 * tableScale),
+      tablePlacement.y + THREE.MathUtils.randFloat(1.6, 4.4) * tableScale,
+      tablePlacement.z + THREE.MathUtils.randFloatSpread(5.4 * tableScale)
+    );
+    confetti.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    confetti.userData.fallSpeed = THREE.MathUtils.randFloat(0.18, 0.55);
+    confetti.userData.spinSpeed = THREE.MathUtils.randFloat(1.2, 3.8);
+    confetti.userData.phase = Math.random() * Math.PI * 2;
+    confetti.userData.noAutoCollision = true;
+    confetti.userData.noAutoShadow = true;
+    partySceneGroup.add(confetti);
+    partySceneGroup.userData.confetti.push(confetti);
+  }
+
+  const partyLight = new THREE.PointLight(0xffd69a, 1.2, 12, 1.7);
+  partyLight.position.set(tablePlacement.x, tablePlacement.y + 3.3 * tableScale, tablePlacement.z + 0.8 * tableScale);
+  partySceneGroup.add(partyLight);
+
+  attachPartyCake();
+  return partySceneGroup;
+}
+
+function placePartyParticipant(object, placement) {
+  if (!object || !placement) return;
+  const groundY = Number(object.userData && object.userData.groundY) || 0;
+  const baseScale = getModelBaseScale(object);
+  const placementScale = getPlacementScale(placement);
+  object.position.set(
+    Number(placement.x) || 0,
+    groundY + (Number(placement.y) || 0),
+    Number(placement.z) || 0
+  );
+  object.rotation.y = Number(placement.rotationY) || 0;
+  object.scale.setScalar(baseScale * placementScale);
+  object.visible = true;
+  object.userData.noCollision = false;
+}
+
+function arrangePartyParticipants() {
+  if (actor) placePartyParticipant(actor, getCurrentPartyPlacement('tim'));
+  FRIEND_DEFS.forEach((def) => {
+    const friend = friendActorsById.get(def.id);
+    if (friend) placePartyParticipant(friend, getCurrentPartyPlacement(def.id));
+  });
+}
+
+function preparePartyScene() {
+  partyLayout = loadPartyLayout();
+  createPartyScene();
+  loadPartyCake();
+  setTimDialogueCompleted(true);
+
+  FRIEND_DEFS.forEach((def) => unlockedFriendIds.add(def.id));
+  friendsState.forEach((friend, index) => {
+    const def = FRIEND_DEFS[index];
+    if (!def) return;
+    friend.name = def.name;
+    friend.description = def.description;
+    friend.weather = def.weatherLabel;
+    friend.image = def.image;
+    friend.unlocked = true;
+  });
+  renderFriendsPanel();
+  syncWeatherUnlockUI();
+
+  arrangePartyParticipants();
+  if (partySceneGroup) partySceneGroup.visible = true;
+  rebuildWorldCollisionBoxes();
+}
+
+function updatePartySceneProps(elapsed, dt) {
+  if (!partySceneGroup || !partySceneGroup.visible) return;
+  const tablePlacement = getCurrentPartyPlacement('table') || { x: PARTY_CENTER.x, y: 0, z: PARTY_CENTER.z, scale: 1 };
+  const tableScale = getPlacementScale(tablePlacement);
+
+  const balloons = partySceneGroup.userData.balloons || [];
+  balloons.forEach((balloon) => {
+    balloon.position.y = balloon.userData.baseY + Math.sin(elapsed * 1.4 + balloon.userData.phase) * 0.08;
+    balloon.rotation.z = Math.sin(elapsed * 1.1 + balloon.userData.phase) * 0.05;
+  });
+
+  const confetti = partySceneGroup.userData.confetti || [];
+  confetti.forEach((piece) => {
+    piece.position.y -= piece.userData.fallSpeed * dt;
+    piece.position.x += Math.sin(elapsed * 1.6 + piece.userData.phase) * dt * 0.12;
+    piece.rotation.x += piece.userData.spinSpeed * dt;
+    piece.rotation.y += piece.userData.spinSpeed * 0.72 * dt;
+
+    if (piece.position.y < tablePlacement.y + 0.95 * tableScale) {
+      piece.position.y = tablePlacement.y + THREE.MathUtils.randFloat(3.1, 4.6) * tableScale;
+      piece.position.x = tablePlacement.x + THREE.MathUtils.randFloatSpread(5.4 * tableScale);
+      piece.position.z = tablePlacement.z + THREE.MathUtils.randFloatSpread(5.4 * tableScale);
+    }
+  });
+}
+
+function lookCameraAtPoint(point) {
+  getCameraLocalLookQuaternion(point, dialogueCameraLocalTargetQuaternion);
+  camera.quaternion.copy(dialogueCameraLocalTargetQuaternion);
+}
+
+function startFinalPartyCutscene() {
+  if (partyCutsceneStarted) return;
+  partyCutsceneStarted = true;
+  partyCutsceneState.transitioning = true;
+  finishDialogueFocus({ restore: false });
+  closeAllPanels();
+
+  if (chatBubbleElement) {
+    chatBubbleElement.classList.add('hidden');
+    chatBubbleElement.innerHTML = '';
+  }
+  if (interactHint) interactHint.classList.add('hidden');
+  if (interactUI) interactUI.style.display = 'none';
+
+  loadPartyCake();
+
+  if (fadeScreen) {
+    fadeScreen.style.transition = 'opacity 0.42s ease';
+    fadeScreen.style.opacity = '1';
+  }
+
+  window.setTimeout(() => {
+    preparePartyScene();
+
+    const camObj = getCameraControlObject();
+    camObj.position.set(PARTY_CENTER.x, 2.2, PARTY_CENTER.z + 7.2);
+    partyLookTarget.copy(PARTY_CENTER).setY(1.0);
+    lookCameraAtPoint(partyLookTarget);
+
+    partyCutsceneState.startedAt = clock.elapsedTime;
+    partyCutsceneState.transitioning = false;
+    partyCutsceneState.active = true;
+    setQuest(QUEST_PARTY_COMPLETE, { playSound: true });
+
+    if (fadeScreen) fadeScreen.style.opacity = '0';
+  }, 1000);
+}
+
+function smoothStep01(value) {
+  const t = clamp01(value);
+  return t * t * (3 - 2 * t);
+}
+
+function updatePartyCutscene(elapsed, dt) {
+  updatePartySceneProps(elapsed, dt);
+  if (!partyCutsceneState.active) return;
+
+  const t = clamp01((elapsed - partyCutsceneState.startedAt) / partyCutsceneState.duration);
+  const eased = smoothStep01(t);
+  const camObj = getCameraControlObject();
+  const angle = THREE.MathUtils.lerp(-0.35, Math.PI * 1.35, eased);
+  const radius = THREE.MathUtils.lerp(7.8, 5.3, Math.sin(t * Math.PI) * 0.55 + t * 0.2);
+  const height = 2.1 + Math.sin(t * Math.PI) * 1.05;
+
+  partyCameraPos.set(
+    PARTY_CENTER.x + Math.sin(angle) * radius,
+    height,
+    PARTY_CENTER.z + Math.cos(angle) * radius
+  );
+  camObj.position.lerp(partyCameraPos, Math.min(1, dt * 3.8));
+
+  partyLookTarget.copy(PARTY_CENTER).setY(1.02 + Math.sin(elapsed * 1.2) * 0.04);
+  lookCameraAtPoint(partyLookTarget);
+
+  if (t >= 1) {
+    partyCutsceneState.active = false;
+    camObj.position.set(PARTY_CENTER.x - 2.7, 2.0, PARTY_CENTER.z + 5.8);
+    partyLookTarget.copy(PARTY_CENTER).setY(1.0);
+    lookCameraAtPoint(partyLookTarget);
+  }
+}
+
+loadPartyCake();
 
 // Resize handling
 window.addEventListener('resize', onWindowResize, false);
@@ -1516,9 +2127,16 @@ function animate() {
     scene.userData.updateWeatherEffects(elapsed, dt);
   }
 
+  updateDialogueCameraFocus(dt);
+  updatePartyCutscene(elapsed, dt);
+
   // proximity check for interact hint
   try {
     if (!interactHint) return;
+    if (partyCutsceneState.active || partyCutsceneState.transitioning) {
+      interactHint.classList.add('hidden');
+      return;
+    }
     if (!controls || !controls.getObject || !controls.isLocked) {
       interactHint.classList.add('hidden');
       return;
@@ -1534,8 +2152,9 @@ function animate() {
 
     let shouldShow = false;
 
-    // Tim (only while intro dialogue is incomplete)
-    if (actor && !timDialogueCompleted) {
+    // Tim (intro first, then return to him once every friend has been found)
+    const timCanTalk = !timDialogueCompleted || (allFriendsFound() && !partyCutsceneStarted);
+    if (actor && timCanTalk) {
       const actorPos = new THREE.Vector3();
       actor.getWorldPosition(actorPos);
       const d = actorPos.distanceTo(playerPos);
@@ -2638,6 +3257,7 @@ animate();
       const requested = btn.dataset.weather;
       if (!requested) return;
       applyWeather(requested);
+      closePanelsAndRelockIfNeeded();
     });
   });
 
