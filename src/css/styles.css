@@ -59,9 +59,13 @@ body::before {
   border-radius: 8px;
   font-weight: 800;
   font-size: 18px;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
   min-width: 44px;
   text-align: center;
+  border: 1px solid rgb(255, 255, 255);
+  box-shadow:
+    0 0 20px rgba(240, 242, 241, 0.421),
+    0 10px 30px rgba(0, 0, 0, 0.35);
+
 }
 
 #interact-hint.hidden {
@@ -132,19 +136,8 @@ body::before {
   gap: 10px;
 }
 
-.quest-head > div {
+.quest-head>div {
   text-align: center;
-}
-
-.quest-orb {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 1.2rem;
-  color: #fff;
-  background: linear-gradient(150deg, #7d95ff, #c667ed);
 }
 
 .quest-label {
@@ -273,7 +266,6 @@ body::before {
   border-width: 6px;
   border-radius: 32px;
   padding: 20px;
-  background: #f3f4f7;
 }
 
 .panel-title-row {
@@ -308,7 +300,6 @@ body::before {
   font-size: 2rem;
   line-height: 1;
   color: #f31f90;
-  background: #efd9e8;
   cursor: pointer;
 }
 
@@ -316,7 +307,6 @@ body::before {
   width: 54px;
   height: 54px;
   font-size: 2.1rem;
-  background: #d2e5f4;
   color: #2083cf;
 }
 
@@ -327,7 +317,6 @@ body::before {
   border-radius: 999px;
   font-size: 1.1rem;
   color: #6d56b3;
-  background: #dcd8eb;
   font-weight: 700;
 }
 
@@ -335,7 +324,6 @@ body::before {
   margin: 0 0 16px;
   padding: 8px 20px;
   color: #3364d1;
-  background: #d9e7f7;
 }
 
 .panel-note {
@@ -583,11 +571,11 @@ body::before {
   transition: left 0.2s ease;
 }
 
-.switch input:checked + span {
+.switch input:checked+span {
   background: linear-gradient(120deg, #8f45f5, #e740a2);
 }
 
-.switch input:checked + span::after {
+.switch input:checked+span::after {
   left: 30px;
 }
 
@@ -661,7 +649,6 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, rgba(215, 232, 247, 0.42), rgba(243, 227, 239, 0.58));
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -757,30 +744,11 @@ body::before {
   padding: 18px 12px 10px;
   border-radius: 28px;
   color: var(--ui-ink);
-  background: transparent;
   border: 0;
   box-shadow: none;
   pointer-events: auto;
   text-align: center;
   overflow: visible;
-}
-
-.instructions-view {
-  display: grid;
-  gap: 12px;
-  justify-items: center;
-}
-
-.party-confetti {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.72;
-  background-image:
-    radial-gradient(circle at 10% 18%, rgba(239, 96, 175, 0.35) 0 5px, transparent 6px),
-    radial-gradient(circle at 82% 14%, rgba(220, 125, 235, 0.4) 0 4px, transparent 5px),
-    radial-gradient(circle at 88% 80%, rgba(255, 169, 203, 0.34) 0 6px, transparent 7px),
-    radial-gradient(circle at 18% 82%, rgba(235, 166, 220, 0.34) 0 4px, transparent 5px);
 }
 
 #start-title {

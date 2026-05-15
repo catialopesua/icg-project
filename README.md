@@ -16,9 +16,9 @@ Help Tim find his 5 friends scattered across the map so they can all celebrate h
 ## Main Files:
 - `testing.html` - entry page
 - `src/js/main.js` - main game logic
-- `src/js/garden.js` - garden zone logic
-- `src/js/city.js` - city zone logic
-- `src/js/beach.js` - beach zone logic
+- `src/environments/garden.js` - garden zone logic
+- `src/environments/city.js` - city zone logic
+- `src/environments/beach.js` - beach zone logic
 - `src/css/styles.css` - UI styling
 
 ## Assets:

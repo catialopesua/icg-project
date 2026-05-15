@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createGardenZone } from './garden.js';
-import { createCityZone } from './city.js';
-import { createBeachZone } from './beach.js';
-import { createForestZone } from './forest.js';
+import { createGardenZone } from './environments/garden.js';
+import { createCityZone } from './environments/city.js';
+import { createBeachZone } from './environments/beach.js';
+import { createForestZone } from './environments/forest.js';
 import {
   FRIEND_DEFS,
   loadFriendPlacements,
@@ -97,7 +97,7 @@ let partyMusicLoaded = false;
 let partyMusicRequested = false;
 
 const audioLoader = new THREE.AudioLoader();
-audioLoader.load('./audio/happy_bday.mp3', 
+audioLoader.load('./audio/happy_bday.mp3',
   (buffer) => {
     partyMusic.setBuffer(buffer);
     partyMusic.setLoop(true);
@@ -1898,11 +1898,11 @@ function startFinalPartyCutscene() {
     partyCutsceneState.transitioning = false;
     partyCutsceneState.active = false; // No more cinematic camera
     setQuest(QUEST_PARTY_COMPLETE, { playSound: true });
-    
+
     playPartyMusic();
 
     if (fadeScreen) fadeScreen.style.opacity = '0';
-    
+
     // Ensure the player is locked and ready to move freely
     if (controls && !controls.isLocked) {
       controls.lock();
