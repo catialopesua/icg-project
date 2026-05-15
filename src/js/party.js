@@ -50,7 +50,7 @@ const FIXED_PARTY_LAYOUT = Object.freeze([
   {
     id: 'balloons1',
     x: -15.2,
-    y: 0,
+    y: -0.9,
     z: -18,
     rotationY: 0.3,
     scale: 1
@@ -58,7 +58,7 @@ const FIXED_PARTY_LAYOUT = Object.freeze([
   {
     id: 'balloons2',
     x: -18.8,
-    y: 0,
+    y: -0.9,
     z: -21.9,
     rotationY: 1.5567,
     scale: 1
@@ -66,7 +66,7 @@ const FIXED_PARTY_LAYOUT = Object.freeze([
   {
     id: 'balloons3',
     x: -15.7,
-    y: 0,
+    y: -0.9,
     z: -21.3,
     rotationY: 2.8133,
     scale: 1
@@ -74,7 +74,7 @@ const FIXED_PARTY_LAYOUT = Object.freeze([
   {
     id: 'balloons4',
     x: -20.8,
-    y: 0,
+    y: -0.9,
     z: -19.1,
     rotationY: 4.0699,
     scale: 1
@@ -82,7 +82,7 @@ const FIXED_PARTY_LAYOUT = Object.freeze([
   {
     id: 'balloons5',
     x: -20.8,
-    y: 0,
+    y: -0.9,
     z: -15,
     rotationY: 5.3265,
     scale: 1

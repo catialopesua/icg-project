@@ -88,6 +88,34 @@ const newQuestAudio = new Audio('./audio/new-quest.mp3');
 newQuestAudio.preload = 'auto';
 const chatContinueAudio = new Audio('./audio/chat-continue.mp3');
 chatContinueAudio.preload = 'auto';
+
+// Spatial Audio for Party
+const audioListener = new THREE.AudioListener();
+camera.add(audioListener);
+const partyMusic = new THREE.PositionalAudio(audioListener);
+let partyMusicLoaded = false;
+let partyMusicRequested = false;
+
+const audioLoader = new THREE.AudioLoader();
+audioLoader.load('./audio/happy_bday.mp3', 
+  (buffer) => {
+    partyMusic.setBuffer(buffer);
+    partyMusic.setLoop(true);
+    partyMusic.setRefDistance(25);
+    partyMusic.setVolume(0.7);
+    partyMusicLoaded = true;
+    if (partyMusicRequested) playPartyMusic();
+  },
+  undefined,
+  (err) => console.error('Error loading happy_bday.mp3:', err)
+);
+
+function playPartyMusic() {
+  partyMusicRequested = true;
+  if (partyMusicLoaded && !partyMusic.isPlaying) {
+    partyMusic.play();
+  }
+}
 const MUSIC_VOLUME_STORAGE_KEY = 'tim-birthday-music-volume';
 const SFX_VOLUME_STORAGE_KEY = 'tim-birthday-sfx-volume';
 const SENSITIVITY_STORAGE_KEY = 'tim-birthday-look-sensitivity';
@@ -185,7 +213,8 @@ function clamp01(value) {
 }
 
 function applyMusicVolume(percentage) {
-  // Placeholder until background music tracks are added to the project.
+  const normalized = clamp01(Number(percentage) / 100);
+  if (partyMusic) partyMusic.setVolume(normalized);
   return Math.max(0, Math.min(100, Math.round(Number(percentage) || 0)));
 }
 
@@ -288,6 +317,10 @@ function setQuest(text, { playSound = true } = {}) {
   currentQuest = text;
   if (questMainTextElement) questMainTextElement.textContent = text;
   if (playSound) playNewQuestSound();
+
+  if (text === QUEST_PARTY_COMPLETE) {
+    playPartyMusic();
+  }
 }
 
 function allFriendsFound() {
@@ -748,6 +781,10 @@ function initPointerLock() {
     btn.addEventListener('click', function (event) {
       event.preventDefault();
       event.stopPropagation();
+      // Resume audio context on user gesture
+      if (audioListener.context.state === 'suspended') {
+        audioListener.context.resume();
+      }
       requestStartPointerLock();
     });
   });
@@ -1686,6 +1723,12 @@ function createPartyScene() {
   partySceneGroup.userData.balloons = [];
   scene.add(partySceneGroup);
 
+  // Attach spatial audio to the party center
+  const audioAnchor = new THREE.Group();
+  audioAnchor.position.copy(PARTY_CENTER);
+  partySceneGroup.add(audioAnchor);
+  audioAnchor.add(partyMusic);
+
   const colors = [0xff4f9d, 0xffcf42, 0x63d7ff, 0x7fe06f, 0xb26cff, 0xff7b54];
   const balloonMatCache = colors.map((color) => new THREE.MeshStandardMaterial({
     color,
@@ -1855,6 +1898,8 @@ function startFinalPartyCutscene() {
     partyCutsceneState.transitioning = false;
     partyCutsceneState.active = false; // No more cinematic camera
     setQuest(QUEST_PARTY_COMPLETE, { playSound: true });
+    
+    playPartyMusic();
 
     if (fadeScreen) fadeScreen.style.opacity = '0';
     
