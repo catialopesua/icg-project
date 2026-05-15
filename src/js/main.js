@@ -314,6 +314,7 @@ if (document.body) document.body.classList.add('pregame');
 let hasJoinedOnce = false;
 let initialPlayerStartApplied = false;
 let panelOpenedFromPointerLock = false;
+let dialogueOpenedFromPointerLock = false;
 
 const PANEL_BY_ID = {
   'weather-panel': weatherPanelElement,
@@ -733,7 +734,7 @@ function initPointerLock() {
 
   controls.addEventListener('unlock', function () {
     const hasOpenPanel = Object.values(PANEL_BY_ID).some((panel) => panel && !panel.classList.contains('hidden'));
-    if (panelOpenedFromPointerLock || hasOpenPanel) return;
+    if (panelOpenedFromPointerLock || dialogueOpenedFromPointerLock || hasOpenPanel || activeDialogue) return;
     if (!hasJoinedOnce) {
       showIntroOverlay();
       return;
@@ -755,6 +756,13 @@ function initPointerLock() {
     instructions.addEventListener('click', function () {
       requestStartPointerLock();
     });
+  }
+
+  function isInputBlocked() {
+    const hasOpenPanel = Object.values(PANEL_BY_ID).some((panel) => panel && !panel.classList.contains('hidden'));
+    const isIntroOpen = blocker && !blocker.classList.contains('hidden') && !hasJoinedOnce;
+    const isPauseOpen = pauseOverlay && !pauseOverlay.classList.contains('hidden');
+    return hasOpenPanel || isIntroOpen || isPauseOpen;
   }
 
   if (pauseOverlay) {
@@ -802,7 +810,7 @@ function initPointerLock() {
     }
 
     // move the control object (the camera wrapper)
-    if (controls.isLocked === true) {
+    if (!isInputBlocked()) {
       const playerObject = controls.getObject();
 
       const beforeXMove = playerObject.position.clone();
@@ -1414,7 +1422,12 @@ function startDialogue(dialogueKey) {
   if (!cfg || !cfg.lines || !cfg.lines.length) return false;
   activeDialogue = dialogueKey;
   activeDialogueIndex = 0;
-  if (controls && !controls.isLocked) controls.lock();
+
+  if (controls && controls.isLocked) {
+    dialogueOpenedFromPointerLock = true;
+    controls.unlock();
+  }
+
   showChatBubble(cfg.lines[activeDialogueIndex], 0, cfg.image, cfg.speaker);
   return true;
 }
@@ -1452,6 +1465,11 @@ document.addEventListener('keydown', (ev) => {
         activeDialogue = null;
         activeDialogueIndex = -1;
         if (typeof cfg.onComplete === 'function') cfg.onComplete();
+
+        if (dialogueOpenedFromPointerLock) {
+          dialogueOpenedFromPointerLock = false;
+          if (controls && !controls.isLocked) controls.lock();
+        }
       }
       return;
     }
