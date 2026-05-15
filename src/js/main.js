@@ -164,7 +164,7 @@ window.addEventListener('keydown', (e) => {
     setTimeout(() => {
       if (!atTop) {
         // going up: remember where we came from so we can come back down
-        try { trigger._lastGroundPosition = playerPos.clone(); } catch (e) {}
+        try { trigger._lastGroundPosition = playerPos.clone(); } catch (e) { }
         trigger._isAtTop = true;
         const dest = (trigger.target && trigger.target.clone) ? trigger.target.clone() : new THREE.Vector3(trigger.position.x, trigger.position.y + 4, trigger.position.z);
         const finalY = dest.y + PLAYER_HEIGHT;
@@ -183,7 +183,7 @@ window.addEventListener('keydown', (e) => {
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
-  
+
 function applyMusicVolume(percentage) {
   // Placeholder until background music tracks are added to the project.
   return Math.max(0, Math.min(100, Math.round(Number(percentage) || 0)));
@@ -259,7 +259,7 @@ const partyCutsceneState = {
 function playButtonClickSound() {
   try {
     buttonClickAudio.currentTime = 0;
-    buttonClickAudio.play().catch(() => {});
+    buttonClickAudio.play().catch(() => { });
   } catch (e) {
     // ignore audio playback failures
   }
@@ -268,7 +268,7 @@ function playButtonClickSound() {
 function playNewQuestSound() {
   try {
     newQuestAudio.currentTime = 0;
-    newQuestAudio.play().catch(() => {});
+    newQuestAudio.play().catch(() => { });
   } catch (e) {
     // ignore audio playback failures
   }
@@ -277,7 +277,7 @@ function playNewQuestSound() {
 function playChatContinueSound() {
   try {
     chatContinueAudio.currentTime = 0;
-    chatContinueAudio.play().catch(() => {});
+    chatContinueAudio.play().catch(() => { });
   } catch (e) {
     // ignore audio playback failures
   }
@@ -672,7 +672,7 @@ function initPointerLock() {
   const velocity = new THREE.Vector3();
   const direction = new THREE.Vector3();
 
-  
+
   // Note: the player is represented by the PointerLockControls object (camera wrapper).
   // We do NOT parent the NPC to the player — the NPC is independent in the scene.
 
@@ -767,7 +767,7 @@ function initPointerLock() {
 
   // movement update called from animate
   function updateMovement(delta) {
-    if (activeDialogue || dialogueFocusState.active || partyCutsceneState.active || partyCutsceneState.transitioning) {
+    if (partyCutsceneState.transitioning) {
       velocity.set(0, 0, 0);
       return;
     }
@@ -1344,115 +1344,12 @@ const INTERACT_DISTANCE = 2.0; // units
 const FACING_DOT_THRESHOLD = 0.60; // cosine of acceptable facing angle (~53deg)
 const interactHint = document.getElementById('interact-hint');
 const dialogueFocusLooker = new THREE.Object3D();
-const dialogueFocusPoint = new THREE.Vector3();
-const dialogueFocusBox = new THREE.Box3();
-const dialogueFocusSize = new THREE.Vector3();
-const dialogueFocusDirection = new THREE.Vector3();
-const dialogueCameraUp = new THREE.Vector3(0, 1, 0);
-const dialogueCameraSide = new THREE.Vector3();
 const dialogueCameraWorldPosition = new THREE.Vector3();
 const dialogueCameraParentQuaternion = new THREE.Quaternion();
 const dialogueCameraLocalTargetQuaternion = new THREE.Quaternion();
-const dialogueFocusState = {
-  active: false,
-  returning: false,
-  target: null,
-  restoreQuaternion: new THREE.Quaternion(),
-  targetQuaternion: new THREE.Quaternion(),
-  restorePosition: new THREE.Vector3(),
-  targetPosition: new THREE.Vector3(),
-  anchorPosition: new THREE.Vector3(),
-  restorePointerSpeed: null,
-  pointerLookDisabled: false
-};
-
-const DIALOGUE_CAMERA_MIN_DISTANCE = 1.8;
-const DIALOGUE_CAMERA_MAX_DISTANCE = 2.8;
-const DIALOGUE_CAMERA_DISTANCE = 3.1;
-const DIALOGUE_CAMERA_SIDE_OFFSET = 0.35;
-const DIALOGUE_CAMERA_HEIGHT_OFFSET = 0.05;
 
 function getCameraControlObject() {
   return (controls && controls.getObject) ? controls.getObject() : camera;
-}
-
-function restoreDialoguePointerSpeed() {
-  if (dialogueFocusState.restorePointerSpeed === null) return;
-  if (controls && typeof controls.pointerSpeed === 'number') {
-    controls.pointerSpeed = dialogueFocusState.restorePointerSpeed;
-  }
-  dialogueFocusState.restorePointerSpeed = null;
-}
-
-function setPointerLookEnabled(enabled) {
-  if (!controls || !controls.domElement || !controls._onMouseMove) return;
-  const ownerDoc = controls.domElement.ownerDocument;
-  if (!ownerDoc) return;
-  if (enabled) {
-    if (dialogueFocusState.pointerLookDisabled) {
-      ownerDoc.addEventListener('mousemove', controls._onMouseMove);
-      dialogueFocusState.pointerLookDisabled = false;
-    }
-  } else if (!dialogueFocusState.pointerLookDisabled) {
-    ownerDoc.removeEventListener('mousemove', controls._onMouseMove);
-    dialogueFocusState.pointerLookDisabled = true;
-  }
-}
-
-function computeDialogueCameraPose(targetObject, anchorPosition, outPosition, outQuaternion) {
-  if (!targetObject) return false;
-  const focusPoint = getObjectFocusPoint(targetObject);
-  dialogueFocusDirection.copy(focusPoint).sub(anchorPosition);
-  const distance = dialogueFocusDirection.length();
-  if (distance < 0.001) {
-    camera.getWorldDirection(dialogueFocusDirection);
-    if (dialogueFocusDirection.lengthSq() < 0.0001) {
-      dialogueFocusDirection.set(0, 0, -1);
-    }
-  } else {
-    dialogueFocusDirection.normalize();
-  }
-
-  dialogueCameraSide.copy(dialogueFocusDirection).cross(dialogueCameraUp);
-  if (dialogueCameraSide.lengthSq() < 0.0001) {
-    dialogueCameraSide.set(1, 0, 0);
-  } else {
-    dialogueCameraSide.normalize();
-  }
-
-  const desiredDistance = THREE.MathUtils.clamp(DIALOGUE_CAMERA_DISTANCE, DIALOGUE_CAMERA_MIN_DISTANCE, DIALOGUE_CAMERA_MAX_DISTANCE);
-  outPosition.copy(focusPoint)
-    .addScaledVector(dialogueFocusDirection, -desiredDistance)
-    .addScaledVector(dialogueCameraSide, DIALOGUE_CAMERA_SIDE_OFFSET);
-  outPosition.y = anchorPosition.y + DIALOGUE_CAMERA_HEIGHT_OFFSET;
-
-  lookQuaternionAt(outPosition, focusPoint, outQuaternion);
-  return true;
-}
-
-function getDialogueTarget(dialogueKey) {
-  if (dialogueKey === 'tim-intro' || dialogueKey === 'tim-party') return actor || null;
-  return friendActorsById.get(dialogueKey) || null;
-}
-
-function getObjectFocusPoint(object, target = dialogueFocusPoint) {
-  if (!object) return target.set(0, PLAYER_HEIGHT, 0);
-  object.updateMatrixWorld(true);
-  dialogueFocusBox.setFromObject(object);
-  if (
-    Number.isFinite(dialogueFocusBox.min.x) &&
-    Number.isFinite(dialogueFocusBox.max.x) &&
-    dialogueFocusBox.max.y > dialogueFocusBox.min.y
-  ) {
-    dialogueFocusBox.getSize(dialogueFocusSize);
-    dialogueFocusBox.getCenter(target);
-    target.y = dialogueFocusBox.min.y + dialogueFocusSize.y * 0.72;
-    return target;
-  }
-
-  object.getWorldPosition(target);
-  target.y += 0.85;
-  return target;
 }
 
 function lookQuaternionAt(fromPosition, targetPosition, outQuaternion) {
@@ -1473,76 +1370,6 @@ function getCameraLocalLookQuaternion(targetPosition, outQuaternion) {
   }
 
   return outQuaternion;
-}
-
-function startDialogueFocus(targetObject) {
-  const focusTarget = targetObject || null;
-  if (!focusTarget) return;
-  dialogueFocusState.active = true;
-  dialogueFocusState.returning = false;
-  dialogueFocusState.target = focusTarget;
-  const camObj = getCameraControlObject();
-  dialogueFocusState.restorePosition.copy(camObj.position);
-  dialogueFocusState.anchorPosition.copy(camObj.position);
-  dialogueFocusState.restoreQuaternion.copy(camera.quaternion);
-  computeDialogueCameraPose(
-    focusTarget,
-    dialogueFocusState.anchorPosition,
-    dialogueFocusState.targetPosition,
-    dialogueFocusState.targetQuaternion
-  );
-  if (controls && typeof controls.pointerSpeed === 'number') {
-    dialogueFocusState.restorePointerSpeed = controls.pointerSpeed;
-    controls.pointerSpeed = 0;
-  }
-  setPointerLookEnabled(false);
-}
-
-function finishDialogueFocus({ restore = true } = {}) {
-  if (!dialogueFocusState.active) return;
-  dialogueFocusState.target = null;
-  if (restore) {
-    dialogueFocusState.returning = true;
-  } else {
-    dialogueFocusState.active = false;
-    dialogueFocusState.returning = false;
-    restoreDialoguePointerSpeed();
-    setPointerLookEnabled(true);
-  }
-}
-
-function updateDialogueCameraFocus(dt) {
-  if (!dialogueFocusState.active) return;
-  const blend = Math.min(1, Math.max(0.08, dt * 6.5));
-
-  if (dialogueFocusState.returning) {
-    camera.position.lerp(dialogueFocusState.restorePosition, blend);
-    camera.quaternion.slerp(dialogueFocusState.restoreQuaternion, blend);
-    if (
-      camera.quaternion.angleTo(dialogueFocusState.restoreQuaternion) < 0.006 &&
-      camera.position.distanceToSquared(dialogueFocusState.restorePosition) < 0.0001
-    ) {
-      camera.position.copy(dialogueFocusState.restorePosition);
-      camera.quaternion.copy(dialogueFocusState.restoreQuaternion);
-      dialogueFocusState.active = false;
-      dialogueFocusState.returning = false;
-      restoreDialoguePointerSpeed();
-      setPointerLookEnabled(true);
-    }
-    return;
-  }
-
-  if (!dialogueFocusState.target) return;
-  if (!computeDialogueCameraPose(
-    dialogueFocusState.target,
-    dialogueFocusState.anchorPosition,
-    dialogueFocusState.targetPosition,
-    dialogueFocusState.targetQuaternion
-  )) {
-    return;
-  }
-  camera.position.lerp(dialogueFocusState.targetPosition, blend);
-  camera.quaternion.slerp(dialogueFocusState.targetQuaternion, blend);
 }
 
 function getDialogueConfig(dialogueKey) {
@@ -1587,8 +1414,8 @@ function startDialogue(dialogueKey) {
   if (!cfg || !cfg.lines || !cfg.lines.length) return false;
   activeDialogue = dialogueKey;
   activeDialogueIndex = 0;
+  if (controls && !controls.isLocked) controls.lock();
   showChatBubble(cfg.lines[activeDialogueIndex], 0, cfg.image, cfg.speaker);
-  startDialogueFocus(getDialogueTarget(dialogueKey));
   return true;
 }
 
@@ -1607,7 +1434,6 @@ document.addEventListener('keydown', (ev) => {
       if (!cfg) {
         activeDialogue = null;
         activeDialogueIndex = -1;
-        finishDialogueFocus();
         if (chatBubbleElement) chatBubbleElement.classList.add('hidden');
         return;
       }
@@ -1625,7 +1451,6 @@ document.addEventListener('keydown', (ev) => {
         const completedDialogueKey = activeDialogue;
         activeDialogue = null;
         activeDialogueIndex = -1;
-        finishDialogueFocus({ restore: completedDialogueKey !== 'tim-party' });
         if (typeof cfg.onComplete === 'function') cfg.onComplete();
       }
       return;
@@ -1700,7 +1525,7 @@ document.addEventListener('keydown', (ev) => {
 
 function showChatBubble(text = '', duration = 4000, imageSrc = 'images/boy1.png', speaker = 'Birthday Boy') {
   const bubble = chatBubbleElement;
-  
+
   if (!bubble) return;
   const safeText = String(text);
   bubble.innerHTML = `
@@ -1990,7 +1815,6 @@ function startFinalPartyCutscene() {
   if (partyCutsceneStarted) return;
   partyCutsceneStarted = true;
   partyCutsceneState.transitioning = true;
-  finishDialogueFocus({ restore: false });
   closeAllPanels();
 
   if (chatBubbleElement) {
@@ -2127,7 +1951,6 @@ function animate() {
     scene.userData.updateWeatherEffects(elapsed, dt);
   }
 
-  updateDialogueCameraFocus(dt);
   updatePartyCutscene(elapsed, dt);
 
   // proximity check for interact hint
@@ -3027,7 +2850,7 @@ animate();
           else if (sl.userData && typeof sl.userData._origIntensity === 'number') sl.intensity = sl.userData._origIntensity;
           else sl.intensity = 2.0;
           sl.visible = true;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const sMeshes = (scene.userData && scene.userData.streetLightMeshes) ? scene.userData.streetLightMeshes : [];
@@ -3041,7 +2864,7 @@ animate();
               else mat.emissiveIntensity = (mesh.userData && typeof mesh.userData._origEmissiveIntensity === 'number') ? mesh.userData._origEmissiveIntensity : 1;
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const cones = (scene.userData && scene.userData.streetLightCones) ? scene.userData.streetLightCones : [];
@@ -3054,7 +2877,7 @@ animate();
             mat.opacity = day ? 0 : ((cone.userData && typeof cone.userData._origOpacity === 'number') ? cone.userData._origOpacity : 0.04);
             mat.transparent = mat.opacity < 1;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     } catch (e) {
       // keep game running even if one light entry is malformed
