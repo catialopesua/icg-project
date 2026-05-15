@@ -20,6 +20,17 @@ import {
   getPartyPlacement,
   loadPartyLayout
 } from './party.js';
+import {
+  partyMusic,
+  initAudioListener,
+  getLookSensitivity,
+  playButtonClickSound,
+  playNewQuestSound,
+  playChatContinueSound,
+  playPartyMusic,
+  setupAudioSettings,
+  setupSensitivitySettings
+} from './core/audio.js';
 
 // Scene & renderer
 const container = document.getElementById('canvas-container') || document.body;
@@ -81,46 +92,9 @@ const interactUI = document.getElementById('interact-ui');
 const fadeScreen = document.getElementById('fade-screen');
 const weatherUnlockToast = document.getElementById('weather-unlock-toast');
 const weatherUnlockedCountElement = document.getElementById('weather-unlocked-count');
-// Audio
-const buttonClickAudio = new Audio('./audio/button-click.mp3');
-buttonClickAudio.preload = 'auto';
-const newQuestAudio = new Audio('./audio/new-quest.mp3');
-newQuestAudio.preload = 'auto';
-const chatContinueAudio = new Audio('./audio/chat-continue.mp3');
-chatContinueAudio.preload = 'auto';
 
-// Spatial Audio for Party
-const audioListener = new THREE.AudioListener();
-camera.add(audioListener);
-const partyMusic = new THREE.PositionalAudio(audioListener);
-let partyMusicLoaded = false;
-let partyMusicRequested = false;
-
-const audioLoader = new THREE.AudioLoader();
-audioLoader.load('./audio/happy_bday.mp3',
-  (buffer) => {
-    partyMusic.setBuffer(buffer);
-    partyMusic.setLoop(true);
-    partyMusic.setRefDistance(25);
-    partyMusic.setVolume(0.7);
-    partyMusicLoaded = true;
-    if (partyMusicRequested) playPartyMusic();
-  },
-  undefined,
-  (err) => console.error('Error loading happy_bday.mp3:', err)
-);
-
-function playPartyMusic() {
-  partyMusicRequested = true;
-  if (partyMusicLoaded && !partyMusic.isPlaying) {
-    partyMusic.play();
-  }
-}
-const MUSIC_VOLUME_STORAGE_KEY = 'tim-birthday-music-volume';
-const SFX_VOLUME_STORAGE_KEY = 'tim-birthday-sfx-volume';
-const SENSITIVITY_STORAGE_KEY = 'tim-birthday-look-sensitivity';
-
-let lookSensitivity = 1;
+// Initialize audio listener (camera will be available shortly)
+let audioListenerInitialized = false;
 let gameReady = false;
 let loadingStarted = false;
 
@@ -212,45 +186,6 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
-function applyMusicVolume(percentage) {
-  const normalized = clamp01(Number(percentage) / 100);
-  if (partyMusic) partyMusic.setVolume(normalized);
-  return Math.max(0, Math.min(100, Math.round(Number(percentage) || 0)));
-}
-
-function applySoundEffectsVolume(percentage) {
-  const normalized = clamp01(Number(percentage) / 100);
-  buttonClickAudio.volume = clamp01(normalized * 0.75);
-  newQuestAudio.volume = clamp01(normalized * 0.95);
-  chatContinueAudio.volume = clamp01(normalized * 0.9);
-}
-
-function applyLookSensitivity(percentage) {
-  const normalized = Math.max(0.2, Math.min(3, Number(percentage) / 100));
-  lookSensitivity = normalized;
-  if (controls) controls.pointerSpeed = normalized;
-}
-
-function loadSavedPercentage(storageKey) {
-  try {
-    const stored = window.localStorage.getItem(storageKey);
-    if (stored == null) return null;
-    const parsed = Number(stored);
-    if (Number.isNaN(parsed)) return null;
-    return Math.max(0, Math.min(100, Math.round(parsed)));
-  } catch (e) {
-    return null;
-  }
-}
-
-function savePercentage(storageKey, percentage) {
-  try {
-    window.localStorage.setItem(storageKey, String(percentage));
-  } catch (e) {
-    // Ignore persistence failures (private mode or blocked storage).
-  }
-}
-
 const QUEST_FIND_BIRTHDAY_BOY = 'Find the Birthday Boy';
 const QUEST_FIND_FRIENDS = "Find Tim's friends";
 const QUEST_RETURN_TO_TIM = 'Return to Tim';
@@ -285,32 +220,7 @@ const partyCutsceneState = {
   cameraTarget: PARTY_CENTER.clone().setY(1.0)
 };
 
-function playButtonClickSound() {
-  try {
-    buttonClickAudio.currentTime = 0;
-    buttonClickAudio.play().catch(() => { });
-  } catch (e) {
-    // ignore audio playback failures
-  }
-}
 
-function playNewQuestSound() {
-  try {
-    newQuestAudio.currentTime = 0;
-    newQuestAudio.play().catch(() => { });
-  } catch (e) {
-    // ignore audio playback failures
-  }
-}
-
-function playChatContinueSound() {
-  try {
-    chatContinueAudio.currentTime = 0;
-    chatContinueAudio.play().catch(() => { });
-  } catch (e) {
-    // ignore audio playback failures
-  }
-}
 
 function setQuest(text, { playSound = true } = {}) {
   if (!text || text === currentQuest) return;
@@ -597,54 +507,8 @@ function setupInterface() {
     if (hasOpenPanel) closePanelsAndRelockIfNeeded();
   });
 
-  if (settingMusicVolume && musicVolumeValue) {
-    const savedVolume = loadSavedPercentage(MUSIC_VOLUME_STORAGE_KEY);
-    if (savedVolume !== null) settingMusicVolume.value = String(savedVolume);
-
-    const syncMusicVolume = () => {
-      const value = Number(settingMusicVolume.value);
-      musicVolumeValue.textContent = `${value}%`;
-      applyMusicVolume(value);
-      savePercentage(MUSIC_VOLUME_STORAGE_KEY, value);
-    };
-    settingMusicVolume.addEventListener('input', syncMusicVolume);
-    syncMusicVolume();
-  } else {
-    applyMusicVolume(70);
-  }
-
-  if (settingSfxVolume && sfxVolumeValue) {
-    const savedSfxVolume = loadSavedPercentage(SFX_VOLUME_STORAGE_KEY);
-    if (savedSfxVolume !== null) settingSfxVolume.value = String(savedSfxVolume);
-
-    const syncSfxVolume = () => {
-      const value = Number(settingSfxVolume.value);
-      sfxVolumeValue.textContent = `${value}%`;
-      applySoundEffectsVolume(value);
-      savePercentage(SFX_VOLUME_STORAGE_KEY, value);
-    };
-    settingSfxVolume.addEventListener('input', syncSfxVolume);
-    syncSfxVolume();
-  } else {
-    applySoundEffectsVolume(80);
-  }
-
-  if (settingSensitivity && sensitivityValue) {
-    const savedSensitivity = loadSavedPercentage(SENSITIVITY_STORAGE_KEY);
-    if (savedSensitivity !== null) settingSensitivity.value = String(savedSensitivity);
-
-    const syncSensitivity = () => {
-      const value = Number(settingSensitivity.value);
-      const multiplier = Math.max(0.2, Math.min(3, value / 100));
-      sensitivityValue.textContent = `${multiplier.toFixed(2)}x`;
-      applyLookSensitivity(value);
-      savePercentage(SENSITIVITY_STORAGE_KEY, value);
-    };
-    settingSensitivity.addEventListener('input', syncSensitivity);
-    syncSensitivity();
-  } else {
-    applyLookSensitivity(100);
-  }
+  setupAudioSettings(settingMusicVolume, musicVolumeValue, settingSfxVolume, sfxVolumeValue);
+  setupSensitivitySettings(settingSensitivity, sensitivityValue, () => controls);
 
   if (settingShadows) {
     settingShadows.checked = true;
@@ -697,7 +561,7 @@ function requestStartPointerLock() {
 
 function initPointerLock() {
   controls = new PointerLockControls(camera, document.body);
-  controls.pointerSpeed = lookSensitivity;
+  controls.pointerSpeed = getLookSensitivity();
   scene.add(controls.getObject());
 
   // movement state
@@ -903,6 +767,12 @@ function initPointerLock() {
 const pointerLockState = initPointerLock();
 controls = pointerLockState.controls;
 const updateMovement = pointerLockState.updateMovement;
+
+// Initialize audio listener now that camera exists
+if (!audioListenerInitialized) {
+  initAudioListener(camera);
+  audioListenerInitialized = true;
+}
 
 // Lights (night mode setup - will be adjusted by applyDayNight)
 scene.add(new THREE.AmbientLight(0xffffff, 0.06));
