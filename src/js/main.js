@@ -1852,17 +1852,16 @@ function startFinalPartyCutscene() {
   window.setTimeout(() => {
     preparePartyScene();
 
-    const camObj = getCameraControlObject();
-    camObj.position.set(PARTY_CENTER.x, 2.2, PARTY_CENTER.z + 7.2);
-    partyLookTarget.copy(PARTY_CENTER).setY(1.0);
-    lookCameraAtPoint(partyLookTarget);
-
-    partyCutsceneState.startedAt = clock.elapsedTime;
     partyCutsceneState.transitioning = false;
-    partyCutsceneState.active = true;
+    partyCutsceneState.active = false; // No more cinematic camera
     setQuest(QUEST_PARTY_COMPLETE, { playSound: true });
 
     if (fadeScreen) fadeScreen.style.opacity = '0';
+    
+    // Ensure the player is locked and ready to move freely
+    if (controls && !controls.isLocked) {
+      controls.lock();
+    }
   }, 1000);
 }
 
@@ -1873,31 +1872,7 @@ function smoothStep01(value) {
 
 function updatePartyCutscene(elapsed, dt) {
   updatePartySceneProps(elapsed, dt);
-  if (!partyCutsceneState.active) return;
-
-  const t = clamp01((elapsed - partyCutsceneState.startedAt) / partyCutsceneState.duration);
-  const eased = smoothStep01(t);
-  const camObj = getCameraControlObject();
-  const angle = THREE.MathUtils.lerp(-0.35, Math.PI * 1.35, eased);
-  const radius = THREE.MathUtils.lerp(7.8, 5.3, Math.sin(t * Math.PI) * 0.55 + t * 0.2);
-  const height = 2.1 + Math.sin(t * Math.PI) * 1.05;
-
-  partyCameraPos.set(
-    PARTY_CENTER.x + Math.sin(angle) * radius,
-    height,
-    PARTY_CENTER.z + Math.cos(angle) * radius
-  );
-  camObj.position.lerp(partyCameraPos, Math.min(1, dt * 3.8));
-
-  partyLookTarget.copy(PARTY_CENTER).setY(1.02 + Math.sin(elapsed * 1.2) * 0.04);
-  lookCameraAtPoint(partyLookTarget);
-
-  if (t >= 1) {
-    partyCutsceneState.active = false;
-    camObj.position.set(PARTY_CENTER.x - 2.7, 2.0, PARTY_CENTER.z + 5.8);
-    partyLookTarget.copy(PARTY_CENTER).setY(1.0);
-    lookCameraAtPoint(partyLookTarget);
-  }
+  // Cinematic camera logic removed. Player maintains free movement.
 }
 
 loadPartyCake();
