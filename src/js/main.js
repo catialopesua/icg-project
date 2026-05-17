@@ -39,8 +39,8 @@ const friendsState = FRIEND_DEFS.map(def => ({
 // ---------------------------------------------------------------------------
 // World Setup
 // ---------------------------------------------------------------------------
-const grassGroundTex = makeTerrainTextureSet('./models/textures/Grass002_2K-JPG/Grass002_2K-JPG', 30);
-const snowGroundTex = makeTerrainTextureSet('./models/textures/Snow015_2K-JPG/Snow015_2K-JPG', 12);
+const grassGroundTex = makeTerrainTextureSet('./textures/Grass002_2K-JPG/Grass002_2K-JPG', 30);
+const snowGroundTex = makeTerrainTextureSet('./textures/Snow015_2K-JPG/Snow015_2K-JPG', 12);
 const groundMat = new THREE.MeshStandardMaterial({
   map: grassGroundTex.map,
   normalMap: grassGroundTex.normal,

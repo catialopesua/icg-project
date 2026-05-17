@@ -26,7 +26,7 @@ function makeStripedTowelTexture(baseColor = '#ff8a80') {
 
 function makeSandTexture() {
   const loader = new THREE.TextureLoader();
-  const textureBasePath = './models/textures/Ground093A_2K-JPG/Ground093A_2K-JPG';
+  const textureBasePath = './textures/Ground093A_2K-JPG/Ground093A_2K-JPG';
   const repeatX = 8;
   const repeatY = 4;
 
@@ -311,7 +311,7 @@ export function createBeachZone(scene, parkCx, parkCz) {
   }
 
   const umbrellaLoader = new GLTFLoader();
-  umbrellaLoader.load('./models/Beach/beachumbrella.glb', (gltf) => {
+  umbrellaLoader.load('./models/blender/Beach/beachumbrella.glb', (gltf) => {
     const umbrellaModel = gltf.scene;
     umbrellaModel.traverse((node) => {
       if (node.isMesh) {
@@ -379,7 +379,7 @@ export function createBeachZone(scene, parkCx, parkCz) {
   }
 
   const boatLoader = new GLTFLoader();
-  boatLoader.load('./models/Beach/boat.glb', (gltf) => {
+  boatLoader.load('./models/blender/Beach/boat.glb', (gltf) => {
     setupBoat(gltf.scene);
   }, undefined, () => {
     setupBoat(createFallbackBoat());
@@ -440,7 +440,7 @@ export function createBeachZone(scene, parkCx, parkCz) {
   }
 
   const palmLoader = new GLTFLoader();
-  palmLoader.load('./models/Beach/palmtree.glb', (gltf) => {
+  palmLoader.load('./models/blender/Beach/palmtree.glb', (gltf) => {
     const palmModel = gltf.scene;
     palmModel.traverse((node) => {
       if (node.isMesh) {

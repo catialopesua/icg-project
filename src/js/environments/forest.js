@@ -11,29 +11,29 @@ export const FOREST_ITEM_TYPES = Object.freeze(['tree', 'grass', 'rock1', 'rock2
 const FOREST_ASSET_DEFS = Object.freeze({
   tree: {
     variantAssets: {
-      default: './models/Forest/tree.glb',
-      snowy: './models/Forest/snowytree.glb'
+      default: './models/downloaded/Forest/tree.glb',
+      snowy: './models/downloaded/Forest/snowytree.glb'
     },
     height: 6.4
   },
   grass: {
-    asset: './models/Forest/grass.glb',
+    asset: './models/downloaded/Forest/grass.glb',
     height: 0.4
   },
   rock1: {
-    asset: './models/Forest/rock1.glb',
+    asset: './models/downloaded/Forest/rock1.glb',
     height: 0.6
   },
   rock2: {
-    asset: './models/Forest/rock2.glb',
+    asset: './models/downloaded/Forest/rock2.glb',
     height: 1.4
   },
   rock3: {
-    asset: './models/Forest/rock3.glb',
+    asset: './models/downloaded/Forest/rock3.glb',
     height: 0.8
   },
     trafficcone: {
-    asset: './models/City/streetcone.glb',
+    asset: './models/blender/City/streetcone.glb',
     height: 0.6
   }
 });

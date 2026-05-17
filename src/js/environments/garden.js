@@ -414,7 +414,7 @@ export function createGardenZone(scene, cx, cz){
   const offset = pathWidth/2 + 0.7;
   const benchScale = 0.35; // make benches noticeably smaller
   const benchLoader = new GLTFLoader();
-  benchLoader.load('./models/Garden/bench.glb', (gltf) => {
+  benchLoader.load('./models/blender/Garden/bench.glb', (gltf) => {
     const benchModel = gltf.scene;
     benchModel.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
     for (let i = 0; i < benchCountAlong; i++){
@@ -590,7 +590,7 @@ export function createGardenZone(scene, cx, cz){
     registerStreetLightCone(cone);
   }
 
-  lightLoader.load('./models/streetlight.glb', (gltf) => {
+  lightLoader.load('./models/blender/streetlight.glb', (gltf) => {
     const lightModel = gltf.scene;
     lightModel.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
     for (let i = 0; i < lightCount; i++) {

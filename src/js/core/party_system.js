@@ -72,7 +72,7 @@ export function loadPartyCakeAsset(layout) {
   if (partyCakeLoadStarted) return;
   partyCakeLoadStarted = true;
   const cakeLoader = new GLTFLoader();
-  cakeLoader.load('./models/cake.glb', (gltf) => {
+  cakeLoader.load('./models/blender/cake.glb', (gltf) => {
     partyCake = gltf.scene; partyCake.name = 'party-cake';
     partyCake.traverse(n => { if(n.isMesh){ n.castShadow=true; n.receiveShadow=true; } n.userData.noAutoCollision=true; });
     const box = new THREE.Box3().setFromObject(partyCake);

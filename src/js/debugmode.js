@@ -178,7 +178,7 @@ function makeTerrainTextureSet(textureBasePath, repeat = 30) {
   return { map, normal, roughness, bump, ao };
 }
 
-const grassGroundTex = makeTerrainTextureSet('./models/textures/Grass002_2K-JPG/Grass002_2K-JPG', 30);
+const grassGroundTex = makeTerrainTextureSet('./textures/Grass002_2K-JPG/Grass002_2K-JPG', 30);
 const groundGeo = new THREE.PlaneGeometry(80, 80);
 if (groundGeo.attributes.uv && !groundGeo.attributes.uv2) {
   groundGeo.setAttribute('uv2', new THREE.BufferAttribute(new Float32Array(groundGeo.attributes.uv.array), 2));
@@ -375,7 +375,7 @@ function loadPartyCakePreview() {
   if (partyCakePreviewLoadStarted) return;
   partyCakePreviewLoadStarted = true;
 
-  friendLoader.load('./models/cake.glb', (gltf) => {
+  friendLoader.load('./models/blender/cake.glb', (gltf) => {
     partyCakePreview = gltf.scene;
     partyCakePreview.name = 'debug-party-cake';
     enableShadows(partyCakePreview);
@@ -522,7 +522,7 @@ function applyTimPlacementToModel() {
 
 function loadFriendModels() {
   FRIEND_DEFS.forEach((def) => {
-    friendLoader.load(`./models/Friends/${def.fileName}`, (gltf) => {
+    friendLoader.load(`./models/blender/Friends/${def.fileName}`, (gltf) => {
       const friend = gltf.scene;
       friend.name = def.id;
       friend.userData.friendId = def.id;
@@ -543,7 +543,7 @@ function loadFriendModels() {
 }
 
 function loadTimModel() {
-  friendLoader.load('./models/Friends/birthday_boy.glb', (gltf) => {
+  friendLoader.load('./models/blender/Friends/birthday_boy.glb', (gltf) => {
     timModel = gltf.scene;
     timModel.name = 'tim';
     timModel.userData.tim = true;

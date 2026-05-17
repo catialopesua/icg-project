@@ -23,10 +23,10 @@ function loadSkyTexture(path) {
   return tex;
 }
 
-const daySkyTexture = loadSkyTexture('./models/environment/DaySkyHDRI001B_4K/DaySkyHDRI001B_4K_TONEMAPPED.jpg');
-const sunsetSkyTexture = loadSkyTexture('./models/environment/EveningSkyHDRI022B_4K/EveningSkyHDRI022B_4K_TONEMAPPED.jpg');
-const nightSkyTexture = loadSkyTexture('./models/environment/NightSkyHDRI003_4K/NightSkyHDRI003_4K_TONEMAPPED.jpg');
-const northernLightsSkyTexture = loadSkyTexture('./models/environment/NightSkyHDRI007_4K/NightSkyHDRI007_4K_TONEMAPPED.jpg');
+const daySkyTexture = loadSkyTexture('./environment/DaySkyHDRI001B_4K/DaySkyHDRI001B_4K_TONEMAPPED.jpg');
+const sunsetSkyTexture = loadSkyTexture('./environment/EveningSkyHDRI022B_4K/EveningSkyHDRI022B_4K_TONEMAPPED.jpg');
+const nightSkyTexture = loadSkyTexture('./environment/NightSkyHDRI003_4K/NightSkyHDRI003_4K_TONEMAPPED.jpg');
+const northernLightsSkyTexture = loadSkyTexture('./environment/NightSkyHDRI007_4K/NightSkyHDRI007_4K_TONEMAPPED.jpg');
 
 let currentWeather = 'sunny';
 let particlesEnabled = true;
