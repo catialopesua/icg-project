@@ -6,10 +6,10 @@ export const TIM_PLACEMENT_STORAGE_KEY = 'tim-birthday-tim-placement-v1';
 export const PLAYER_START_STORAGE_KEY = 'tim-birthday-player-start-v1';
 
 const DEFAULT_TIM_PLACEMENT = Object.freeze({
-  x: -16.7,
+  x: -16.3,
   y: 0,
-  z: 13.4,
-  rotationY: 0
+  z: 13.7,
+  rotationY: 4.7124
 });
 
 const DEFAULT_PLAYER_START = Object.freeze({
@@ -33,7 +33,7 @@ export const FRIEND_DEFS = Object.freeze([
       'A party… at the park? Not really my thing...',
       'But for Tim… yeah, I’ll show up. Could be nice, I guess.'
     ],
-    defaultPlacement: { x: 33.3, z: -1.1, rotationY: Math.PI * 0.75 }
+    defaultPlacement: { x: 27.2, y: 0, z: -1.3, rotationY: 2.356194490192345 }
   },
   {
     id: 'friend2',
@@ -48,7 +48,7 @@ export const FRIEND_DEFS = Object.freeze([
       'A birthday party for Tim?! Oh my gosh, that sounds SO adorable!!',
       'I’m definitely coming!'
     ],
-    defaultPlacement: { x: -10.8, z: -33.7, rotationY: 11.205 }
+    defaultPlacement: { x: -10.8, y: 0, z: -33.7, rotationY: 11.205 }
   },
   {
     id: 'friend3',
@@ -63,7 +63,7 @@ export const FRIEND_DEFS = Object.freeze([
       'A birthday party at the park? Okay, that actually sounds awesome. I’m in!',
       'We better have snacks though, It’s not a real party otherwise.'
     ],
-    defaultPlacement: { x: 17, z: 36.7, rotationY: -Math.PI * 0.35 }
+    defaultPlacement: { x: 17, y: 0, z: 36.7, rotationY: -1.0995574287564276 }
   },
   {
     id: 'friend4',
@@ -78,7 +78,7 @@ export const FRIEND_DEFS = Object.freeze([
       'A birthday celebration in the park… how charming.',
       'There’s something quite special about open air and quiet surroundings. I would be more than happy to attend. It sounds like a lovely way to celebrate Tim.'
     ],
-    defaultPlacement: { x: -33.1, z: 2, rotationY: 4.782 }
+    defaultPlacement: { x: -33.1, y: 0, z: 2, rotationY: 4.782 }
   },
   {
     id: 'friend5',
@@ -94,7 +94,7 @@ export const FRIEND_DEFS = Object.freeze([
       'A PARTY IN THE PARK?? wait wait wait that’s actually insane. like outside?? grass?? sky??',
       'bro I’m already going. I’m bringing chaos. I might climb something. I might yell. this is gonna be SO FUN'
     ],
-    defaultPlacement: { x: 21, z: 14.4,rotationY: 693, y: 14.4 }
+    defaultPlacement: { x: 21, y: 14.4, z: -28.2, rotationY: 12.0952 }
   }
 ]);
 

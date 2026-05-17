@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createGardenZone } from './garden.js';
-import { createCityZone } from './city.js';
-import { createBeachZone } from './beach.js';
+import { createGardenZone } from './environments/garden.js';
+import { createCityZone } from './environments/city.js';
+import { createBeachZone } from './environments/beach.js';
 import {
   DEFAULT_FOREST_LAYOUT,
   FOREST_ITEM_TYPES,
@@ -12,7 +12,7 @@ import {
   layoutToCode,
   loadForestLayout,
   saveForestLayout
-} from './forest.js';
+} from './environments/forest.js';
 import {
   FRIEND_DEFS,
   clearFriendPlacements,
