@@ -1,8 +1,56 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-export function createCityZone(scene, cx, cz){
+/**
+ * Creates the procedural and model-based elements for the city zone,
+ * including roads, sidewalks, streetlights, trash bins, and buildings.
+ * Configures lighting, materials, and registers entities for collision and diurnal logic.
+ *
+ * @param {THREE.Scene} scene - The main Three.js scene where elements will be added.
+ * @param {number} cx - The center X coordinate for the city zone placement.
+ * @param {number} cz - The center Z coordinate for the city zone placement.
+ */
+export function createCityZone(scene, cx, cz) {
+  const textureLoader = new THREE.TextureLoader();
+
+  // Plain solid color road material (reverted to original simple aesthetic)
   const roadMat = new THREE.MeshStandardMaterial({ color: 0x2f2f2f, roughness: 0.95, metalness: 0.02 });
+
+  // Load Bricks034_1K-JPG textures with 90 degrees horizontal rotation (Math.PI / 2)
+  const brickColorTex = textureLoader.load('./textures/Bricks034_1K-JPG/Bricks034_1K-JPG_Color.jpg');
+  brickColorTex.wrapS = brickColorTex.wrapT = THREE.RepeatWrapping;
+  brickColorTex.colorSpace = THREE.SRGBColorSpace;
+  brickColorTex.repeat.set(6, 6);
+  brickColorTex.rotation = Math.PI / 2;
+  brickColorTex.center.set(0.5, 0.5);
+
+  const brickNormalTex = textureLoader.load('./textures/Bricks034_1K-JPG/Bricks034_1K-JPG_NormalGL.jpg');
+  brickNormalTex.wrapS = brickNormalTex.wrapT = THREE.RepeatWrapping;
+  brickNormalTex.repeat.set(6, 6);
+  brickNormalTex.rotation = Math.PI / 2;
+  brickNormalTex.center.set(0.5, 0.5);
+
+  const brickRoughnessTex = textureLoader.load('./textures/Bricks034_1K-JPG/Bricks034_1K-JPG_Roughness.jpg');
+  brickRoughnessTex.wrapS = brickRoughnessTex.wrapT = THREE.RepeatWrapping;
+  brickRoughnessTex.repeat.set(6, 6);
+  brickRoughnessTex.rotation = Math.PI / 2;
+  brickRoughnessTex.center.set(0.5, 0.5);
+
+  const brickAoTex = textureLoader.load('./textures/Bricks034_1K-JPG/Bricks034_1K-JPG_AmbientOcclusion.jpg');
+  brickAoTex.wrapS = brickAoTex.wrapT = THREE.RepeatWrapping;
+  brickAoTex.repeat.set(6, 6);
+  brickAoTex.rotation = Math.PI / 2;
+  brickAoTex.center.set(0.5, 0.5);
+
+  const brickMat = new THREE.MeshStandardMaterial({
+    map: brickColorTex,
+    normalMap: brickNormalTex,
+    roughnessMap: brickRoughnessTex,
+    aoMap: brickAoTex,
+    roughness: 0.8,
+    metalness: 0.05
+  });
+
   const laneLineMat = new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.9 });
   const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x7d7d7d, roughness: 0.95 });
   const roads = []; // track road rectangles for placement checks
@@ -221,7 +269,7 @@ export function createCityZone(scene, cx, cz){
 
   addRoad(4.2, 34, cx, cz, true);
   addRoad(4.2, 28 + 19.6, cx, cz, false); // este
-  addRoad(3.2, 26 + 10, cx, cz + 11.8, true); 
+  addRoad(3.2, 26 + 10, cx, cz + 11.8, true);
   addRoad(3.2, 22 + 15, cx, cz - 18, true);
   buildDashedCenterLines();
 
@@ -229,7 +277,7 @@ export function createCityZone(scene, cx, cz){
   // Global multiplier and per-model scale overrides.
   // Set `BUILDING_SCALE_MULTIPLIER` to 1.0 for no global change; adjust per-model scales below.
   const BUILDING_SCALE_MULTIPLIER = 1.0;
-  const BUILDING_MODEL_SCALES = { 1: 1.8, 2: 1.8, 3: 1.8};
+  const BUILDING_MODEL_SCALES = { 1: 1.8, 2: 1.8, 3: 1.8 };
 
   function dirToRot(dir) {
     if (!dir || typeof dir !== 'string') return 0;
@@ -244,12 +292,15 @@ export function createCityZone(scene, cx, cz){
 
   // Simplified placement: place exactly at provided x,y,z with cardinal `dir` rotation.
   // If `y` is omitted, the model will be placed on the ground (using its bounding-box min Y).
-  function placeBuilding(base, x, y, z, dir, modelScale) {
+  function placeBuilding(base, x, y, z, dir, modelScale, applyBrick = false) {
     const b = base.clone(true);
     b.traverse((n) => {
       if (n.isMesh) {
         n.castShadow = true;
         n.receiveShadow = true;
+        if (applyBrick && n.name === 'Cube') {
+          n.material = brickMat;
+        }
       }
     });
 
@@ -285,26 +336,26 @@ export function createCityZone(scene, cx, cz){
   const placements = [
     // Along main horizontal road (z = cz)
     { model: 1, x: cx - 14.8, z: cz - 6.1, dir: 'W' },
-    { model: 2, x: cx - 7.5,   z: cz - 6.1,  dir: 'W' },
-    { model: 1, x: cx + 7.5,  z: cz - 6.1,  dir: 'W' },
-    { model: 2, x: cx + 14.8, z: cz - 6.1,  dir: 'W' },
+    { model: 2, x: cx - 7.5, z: cz - 6.1, dir: 'W' },
+    { model: 1, x: cx + 7.5, z: cz - 6.1, dir: 'W' },
+    { model: 2, x: cx + 14.8, z: cz - 6.1, dir: 'W' },
 
-    { model: 2, x: cx - 14.8, z: cz + 6.1,  dir: 'E' },
-    { model: 1, x: cx - 7.5,  z: cz + 6.1,  dir: 'E' },
-    { model: 2, x: cx + 7.5,  z: cz + 6.1,  dir: 'E' },
-    { model: 1, x: cx + 14.8, z: cz + 6.1,  dir: 'E' },
+    { model: 2, x: cx - 14.8, z: cz + 6.1, dir: 'E' },
+    { model: 1, x: cx - 7.5, z: cz + 6.1, dir: 'E' },
+    { model: 2, x: cx + 7.5, z: cz + 6.1, dir: 'E' },
+    { model: 1, x: cx + 14.8, z: cz + 6.1, dir: 'E' },
 
     // Along main vertical road (x = cx)
-    { model: 1, x: cx - 7.5,  z: cz - 12.5, dir: 'E' },
-    { model: 2, x: cx + 7.5,  z: cz - 12.5, dir: 'E' },
-    { model: 2, x: cx - 14.8,  z: cz - 12.5, dir: 'E' },
-    { model: 2, x: cx + 14.8,  z: cz - 12.5, dir: 'E' },
+    { model: 1, x: cx - 7.5, z: cz - 12.5, dir: 'E' },
+    { model: 2, x: cx + 7.5, z: cz - 12.5, dir: 'E' },
+    { model: 2, x: cx - 14.8, z: cz - 12.5, dir: 'E' },
+    { model: 2, x: cx + 14.8, z: cz - 12.5, dir: 'E' },
 
-    { model: 1, x: cx - 7.5,  z: cz - 25, dir: 'W' },
-    { model: 1, x: cx - 14.8,  z: cz - 25, dir: 'W' },
-    { model: 2, x: cx + 7.5,  z: cz - 25, dir: 'W' },
-    { model: 2, x: cx + 14.8,  z: cz - 25, dir: 'W' },
-    { model: 3, x: cx ,  z: cz - 25, dir: 'W' }
+    { model: 1, x: cx - 7.5, z: cz - 25, dir: 'W' },
+    { model: 1, x: cx - 14.8, z: cz - 25, dir: 'W' },
+    { model: 2, x: cx + 7.5, z: cz - 25, dir: 'W' },
+    { model: 2, x: cx + 14.8, z: cz - 25, dir: 'W' },
+    { model: 3, x: cx, z: cz - 25, dir: 'W' }
 
   ];
 
@@ -316,19 +367,19 @@ export function createCityZone(scene, cx, cz){
   const lightPlacements = [
 
     { model: 'streetlight', x: cx - 3.2, z: cz - 10.0, dir: 'S' },
-    { model: 'streetlight', x: cx - 3.2, z: cz + 6.0,  dir: 'S' },
-    { model: 'streetlight', x: cx - 3.2, z: cz + 16.0,  dir: 'S' },
-    { model: 'streetlight', x: cx - 3.2, z: cz - 21.0,  dir: 'E' },
-    { model: 'streetlight', x: cx - 14, z: cz - 21.0,  dir: 'E' },
+    { model: 'streetlight', x: cx - 3.2, z: cz + 6.0, dir: 'S' },
+    { model: 'streetlight', x: cx - 3.2, z: cz + 16.0, dir: 'S' },
+    { model: 'streetlight', x: cx - 3.2, z: cz - 21.0, dir: 'E' },
+    { model: 'streetlight', x: cx - 14, z: cz - 21.0, dir: 'E' },
 
     { model: 'streetlight', x: cx + 3.2, z: cz - 10.0, dir: 'N' },
-    { model: 'streetlight', x: cx + 3.2, z: cz + 6.0,  dir: 'N' },
-    { model: 'streetlight', x: cx + 3.2, z: cz + 16.0,  dir: 'N' },
-    { model: 'streetlight', x: cx + 3.2, z: cz - 21.0,  dir: 'E' },
-    { model: 'streetlight', x: cx + 14, z: cz - 21.0,  dir: 'E' },
+    { model: 'streetlight', x: cx + 3.2, z: cz + 6.0, dir: 'N' },
+    { model: 'streetlight', x: cx + 3.2, z: cz + 16.0, dir: 'N' },
+    { model: 'streetlight', x: cx + 3.2, z: cz - 21.0, dir: 'E' },
+    { model: 'streetlight', x: cx + 14, z: cz - 21.0, dir: 'E' },
 
-    { model: 'streetlight', x: cx + 11, z: cz - 2,  dir: 'E' },
-    { model: 'streetlight', x: cx - 11, z: cz - 2,  dir: 'E' }
+    { model: 'streetlight', x: cx + 11, z: cz - 2, dir: 'E' },
+    { model: 'streetlight', x: cx - 11, z: cz - 2, dir: 'E' }
 
   ];
 
@@ -361,14 +412,14 @@ export function createCityZone(scene, cx, cz){
     // Penumbra: 0.3 for soft edges instead of 0.22
     // Decay: 2 for realistic inverse-square falloff
     const spot = new THREE.SpotLight(0xffd699, 2.5, 20, Math.PI / 2.5, 0.9, 2);
-    
+
     // Position light slightly below lamp head for realistic downward lighting
     spot.position.set(x, topY - 0.5, z + spotZOffset);
     spot.target.position.set(x, 0.05, z);
-    
+
     // Disable shadow casting to save texture units (directional light handles scene shadows)
     spot.castShadow = false;
-    
+
     scene.add(spot.target);
     scene.add(spot);
 
@@ -389,15 +440,15 @@ export function createCityZone(scene, cx, cz){
     const dir = new THREE.Vector3().subVectors(spot.target.position, spot.position).normalize();
     const coneHeight = Math.max(1.2, spot.position.y - 0.05);
     const baseRadius = Math.max(0.2, coneHeight * Math.tan(spot.angle) * 0.95);
-    
+
     // Enhanced cone with better geometry
     const coneGeo = new THREE.ConeGeometry(baseRadius * 1.3, coneHeight * 1.2, 24, 1, true);
-    const coneMat = new THREE.MeshStandardMaterial({ 
-      color: 0xffd699, 
-      transparent: true, 
+    const coneMat = new THREE.MeshStandardMaterial({
+      color: 0xffd699,
+      transparent: true,
       opacity: 0.005
-      , 
-      depthWrite: false, 
+      ,
+      depthWrite: false,
       side: THREE.DoubleSide,
       emissive: 0xffd699,
       emissiveIntensity: 0.1
@@ -426,13 +477,13 @@ export function createCityZone(scene, cx, cz){
         if (scene.userData.isDay) {
           for (const mat of mats) if (mat && typeof mat.opacity === 'number') mat.opacity = 0;
         }
-      } catch (e) {}
+      } catch (e) { }
       scene.userData.streetLightMeshes.push(cone);
       // also track cones separately so we can toggle their visibility explicitly
       scene.userData.streetLightCones = scene.userData.streetLightCones || [];
       scene.userData.streetLightCones.push(cone);
       if (scene.userData.isDay) cone.visible = false;
-    } catch (e) {}
+    } catch (e) { }
 
     // record bulb/emissive meshes on the lamp for later toggling (only register true bulb materials)
     try {
@@ -477,7 +528,7 @@ export function createCityZone(scene, cx, cz){
               // if currently day, dim the emissive immediately (do not change mesh visibility)
               try {
                 if (mat.emissive !== undefined) mat.emissiveIntensity = scene.userData.isDay ? 0 : resolvedIntensity;
-              } catch (e) {}
+              } catch (e) { }
               break;
             }
           }
@@ -518,10 +569,10 @@ export function createCityZone(scene, cx, cz){
     const spot = new THREE.SpotLight(0xffd699, 1.8, 10, Math.PI / 5, 0.4, 2);
     spot.position.set(x, 2.15, z);
     spot.target.position.set(roadTargetX, 0.05, roadTargetZ);
-    
+
     // Disable shadow casting to save texture units (directional light handles scene shadows)
     spot.castShadow = false;
-    
+
     scene.add(spot.target);
     scene.add(spot);
 
@@ -540,7 +591,7 @@ export function createCityZone(scene, cx, cz){
       scene.userData.streetLightMeshes.push(bulb);
       if (scene.userData.isDay) {
         spot.intensity = 0;
-        try { if (bulb.material && bulb.material.emissive !== undefined) bulb.material.emissiveIntensity = 0; } catch(e){}
+        try { if (bulb.material && bulb.material.emissive !== undefined) bulb.material.emissiveIntensity = 0; } catch (e) { }
       }
     } catch (e) {
       console.warn('Failed to register fallback streetlight', e);
@@ -550,11 +601,11 @@ export function createCityZone(scene, cx, cz){
     const coneHeight = Math.max(1.0, spot.position.y - 0.05);
     const baseRadius = Math.max(0.18, coneHeight * Math.tan(spot.angle) * 0.9);
     const coneGeo = new THREE.ConeGeometry(baseRadius * 1.2, coneHeight * 1.1, 28, 1, true);
-    const coneMat = new THREE.MeshStandardMaterial({ 
-      color: 0xffd699, 
-      transparent: true, 
-      opacity: 0.035, 
-      depthWrite: false, 
+    const coneMat = new THREE.MeshStandardMaterial({
+      color: 0xffd699,
+      transparent: true,
+      opacity: 0.035,
+      depthWrite: false,
       side: THREE.DoubleSide,
       emissive: 0xffd699,
       emissiveIntensity: 0.08
@@ -579,12 +630,12 @@ export function createCityZone(scene, cx, cz){
         cone.userData = cone.userData || {};
         cone.userData._origOpacity = (mats[0] && typeof mats[0].opacity === 'number') ? mats[0].opacity : 1;
         if (scene.userData.isDay) for (const mat of mats) if (mat && typeof mat.opacity === 'number') mat.opacity = 0;
-      } catch (e) {}
+      } catch (e) { }
       scene.userData.streetLightMeshes.push(cone);
       scene.userData.streetLightCones = scene.userData.streetLightCones || [];
       scene.userData.streetLightCones.push(cone);
       if (scene.userData.isDay) cone.visible = false;
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const beachLightSpots = [];
@@ -828,7 +879,7 @@ export function createCityZone(scene, cx, cz){
       if (p.model === 1) {
         const y = (typeof p.y === 'number') ? p.y : undefined;
         const rot = (typeof p.dir === 'string') ? p.dir : (typeof p.rotY === 'number' ? p.rotY : undefined);
-        placeBuilding(model1, p.x, y, p.z, rot, BUILDING_MODEL_SCALES[1]);
+        placeBuilding(model1, p.x, y, p.z, rot, BUILDING_MODEL_SCALES[1], true);
       }
     }
   }, undefined, (err) => {
@@ -841,7 +892,7 @@ export function createCityZone(scene, cx, cz){
       if (p.model === 2) {
         const y = (typeof p.y === 'number') ? p.y : undefined;
         const rot = (typeof p.dir === 'string') ? p.dir : (typeof p.rotY === 'number' ? p.rotY : undefined);
-        placeBuilding(model2, p.x, y, p.z, rot, BUILDING_MODEL_SCALES[2]);
+        placeBuilding(model2, p.x, y, p.z, rot, BUILDING_MODEL_SCALES[2], true);
       }
     }
   }, undefined, (err) => {
@@ -857,7 +908,7 @@ export function createCityZone(scene, cx, cz){
           console.log('Found ladder-like node in building3:', n.name, n);
         }
       });
-    } catch (e) {}
+    } catch (e) { }
 
     for (const p of validPlacements) {
       if (p.model === 3) {
@@ -865,7 +916,7 @@ export function createCityZone(scene, cx, cz){
         const rot = (typeof p.dir === 'string') ? p.dir : (typeof p.rotY === 'number') ? p.rotY : 0;
 
         // place building normally
-        placeBuilding(model3, p.x, y, p.z, rot, BUILDING_MODEL_SCALES[3]);
+        placeBuilding(model3, p.x, y, p.z, rot, BUILDING_MODEL_SCALES[3], true);
 
         // create stair/ladder trigger and a debug marker so we can visually inspect location
         const triggerPos = new THREE.Vector3(p.x + 3, 0, p.z + 1.9);
@@ -881,7 +932,7 @@ export function createCityZone(scene, cx, cz){
             scene.remove(scene.userData._stairDebug);
             scene.userData._stairDebug = null;
           }
-        } catch (e) {}
+        } catch (e) { }
 
         const debugGroup = new THREE.Group();
         debugGroup.name = 'stair-debug-group';
