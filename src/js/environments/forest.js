@@ -33,7 +33,7 @@ const FOREST_ASSET_DEFS = Object.freeze({
     height: 0.8
   },
     trafficcone: {
-    asset: './models/blender/City/streetcone.glb',
+    asset: './models/Blender/City/streetcone.glb',
     height: 0.6
   }
 });

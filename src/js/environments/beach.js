@@ -311,7 +311,7 @@ export function createBeachZone(scene, parkCx, parkCz) {
   }
 
   const umbrellaLoader = new GLTFLoader();
-  umbrellaLoader.load('./models/blender/Beach/beachumbrella.glb', (gltf) => {
+  umbrellaLoader.load('./models/Blender/Beach/beachumbrella.glb', (gltf) => {
     const umbrellaModel = gltf.scene;
     umbrellaModel.traverse((node) => {
       if (node.isMesh) {
@@ -379,7 +379,7 @@ export function createBeachZone(scene, parkCx, parkCz) {
   }
 
   const boatLoader = new GLTFLoader();
-  boatLoader.load('./models/blender/Beach/boat.glb', (gltf) => {
+  boatLoader.load('./models/Blender/Beach/boat.glb', (gltf) => {
     setupBoat(gltf.scene);
   }, undefined, () => {
     setupBoat(createFallbackBoat());
@@ -440,7 +440,7 @@ export function createBeachZone(scene, parkCx, parkCz) {
   }
 
   const palmLoader = new GLTFLoader();
-  palmLoader.load('./models/blender/Beach/palmtree.glb', (gltf) => {
+  palmLoader.load('./models/Blender/Beach/palmtree.glb', (gltf) => {
     const palmModel = gltf.scene;
     palmModel.traverse((node) => {
       if (node.isMesh) {

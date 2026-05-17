@@ -719,7 +719,7 @@ export function createCityZone(scene, cx, cz) {
     }
   }
 
-  lightLoader.load('./models/blender/streetlight.glb', (lightGltf) => {
+  lightLoader.load('./models/Blender/streetlight.glb', (lightGltf) => {
     baseLightModel = lightGltf.scene;
     // place beach lights immediately
     for (const s of beachLightSpots) {
@@ -800,7 +800,7 @@ export function createCityZone(scene, cx, cz) {
     placeBinsForCityLights(binModelGlobal);
   }
 
-  loader.load('./models/blender/City/trashbin.glb', (gltf) => {
+  loader.load('./models/Blender/City/trashbin.glb', (gltf) => {
     const binModel = gltf.scene;
     binModel.userData = binModel.userData || {};
     binModel.userData.noCollision = true;
@@ -873,7 +873,7 @@ export function createCityZone(scene, cx, cz) {
     tryPlaceBinsForCityLightsWhenReady();
   });
 
-  loader.load('./models/blender/City/building1.glb', (gltf1) => {
+  loader.load('./models/Blender/City/building1.glb', (gltf1) => {
     const model1 = gltf1.scene;
     for (const p of validPlacements) {
       if (p.model === 1) {
@@ -886,7 +886,7 @@ export function createCityZone(scene, cx, cz) {
     console.warn('Failed to load building1.glb', err);
   });
 
-  loader.load('./models/blender/City/building2.glb', (gltf2) => {
+  loader.load('./models/Blender/City/building2.glb', (gltf2) => {
     const model2 = gltf2.scene;
     for (const p of validPlacements) {
       if (p.model === 2) {
@@ -899,7 +899,7 @@ export function createCityZone(scene, cx, cz) {
     console.warn('Failed to load building2.glb', err);
   });
 
-  loader.load('./models/blender/City/building3.glb', (gltf3) => {
+  loader.load('./models/Blender/City/building3.glb', (gltf3) => {
     const model3 = gltf3.scene;
     // quick debug: search the loaded model for nodes that look like ladders
     try {

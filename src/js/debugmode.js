@@ -375,7 +375,7 @@ function loadPartyCakePreview() {
   if (partyCakePreviewLoadStarted) return;
   partyCakePreviewLoadStarted = true;
 
-  friendLoader.load('./models/blender/cake.glb', (gltf) => {
+  friendLoader.load('./models/Blender/cake.glb', (gltf) => {
     partyCakePreview = gltf.scene;
     partyCakePreview.name = 'debug-party-cake';
     enableShadows(partyCakePreview);
@@ -522,7 +522,7 @@ function applyTimPlacementToModel() {
 
 function loadFriendModels() {
   FRIEND_DEFS.forEach((def) => {
-    friendLoader.load(`./models/blender/Friends/${def.fileName}`, (gltf) => {
+    friendLoader.load(`./models/Blender/Friends/${def.fileName}`, (gltf) => {
       const friend = gltf.scene;
       friend.name = def.id;
       friend.userData.friendId = def.id;
@@ -543,7 +543,7 @@ function loadFriendModels() {
 }
 
 function loadTimModel() {
-  friendLoader.load('./models/blender/Friends/birthday_boy.glb', (gltf) => {
+  friendLoader.load('./models/Blender/Friends/birthday_boy.glb', (gltf) => {
     timModel = gltf.scene;
     timModel.name = 'tim';
     timModel.userData.tim = true;

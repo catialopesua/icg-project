@@ -12,7 +12,7 @@ const loader = new GLTFLoader();
  * @param {Function} onLoaded 
  */
 export function loadFriendModel(def, placement, onLoaded) {
-  loader.load(`./models/blender/Friends/${def.fileName}`, (gltf) => {
+  loader.load(`./models/Blender/Friends/${def.fileName}`, (gltf) => {
     const friend = gltf.scene;
     friend.name = def.id;
     friend.userData.friendId = def.id;
@@ -42,7 +42,7 @@ export function loadFriendModel(def, placement, onLoaded) {
  * @param {Function} onLoaded 
  */
 export function loadTimModel(placement, onLoaded) {
-  loader.load('./models/blender/Friends/birthday_boy.glb', (gltf) => {
+  loader.load('./models/Blender/Friends/birthday_boy.glb', (gltf) => {
     const actor = gltf.scene;
     enableShadows(actor);
     const desiredHeight = 1.2;
@@ -68,7 +68,7 @@ export function loadTimModel(placement, onLoaded) {
  * Loads the birthday cake.
  */
 export function loadCakeModel(onLoaded) {
-  loader.load('./models/blender/cake.glb', (gltf) => {
+  loader.load('./models/Blender/cake.glb', (gltf) => {
     const cake = gltf.scene;
     cake.name = 'party-cake';
     enableShadows(cake);
