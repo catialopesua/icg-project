@@ -1,0 +1,164 @@
+/* Responsive overrides */
+@media (max-width: 900px) {
+  #tool-dock {
+    left: 10px;
+    top: 10px;
+    gap: 8px;
+  }
+
+  .tool-key {
+    font-size: 0.68rem;
+  }
+
+  .quest-label {
+    font-size: 0.95rem;
+  }
+
+  .quest-main {
+    font-size: 1.45rem;
+  }
+
+  .chip-action {
+    font-size: 0.92rem;
+    padding: 7px 10px;
+  }
+
+  .chip-action .material-symbols-rounded {
+    font-size: 1.22rem;
+  }
+
+  .volume-control {
+    min-width: 128px;
+  }
+
+  .volume-slider {
+    width: 128px;
+  }
+
+  .quest-orb {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  #ui-panels {
+    padding-top: 70px;
+  }
+
+  .floating-panel {
+    width: min(97vw, 560px);
+    max-height: calc(100vh - 84px);
+  }
+
+  .panel-title-row h2 {
+    font-size: 2.2rem;
+  }
+
+  .panel-close {
+    width: 42px;
+    height: 42px;
+    font-size: 1.4rem;
+  }
+
+  .panel-badge {
+    font-size: 1rem;
+  }
+
+  #chat-bubble,
+  #ui-panels,
+  #interact-hint {
+    pointer-events: auto;
+  }
+
+  .panel-note,
+  .friend-desc,
+  .help-block p,
+  .setting-row p,
+  .weather-option small {
+    font-size: 1.04rem;
+  }
+
+  .friend-name,
+  .setting-row h3,
+  .help-block h3,
+  .weather-option strong {
+    font-size: 1.5rem;
+  }
+
+  .option-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 1.55rem;
+    border-radius: 14px;
+  }
+
+  #weather-panel .panel-title-row h2 {
+    font-size: 2.35rem;
+  }
+
+  #weather-panel .panel-badge {
+    font-size: 1.15rem;
+  }
+
+  #weather-panel .panel-note {
+    font-size: 1.18rem;
+  }
+
+  #weather-panel .weather-option {
+    grid-template-columns: 56px 1fr;
+    padding: 10px 12px;
+  }
+
+  #weather-panel .weather-option .option-icon {
+    width: 46px;
+    height: 46px;
+    font-size: 1.55rem;
+    border-radius: 14px;
+  }
+
+  #weather-panel .weather-option strong {
+    font-size: 1.85rem;
+  }
+
+  #weather-panel .weather-option small {
+    font-size: 1.18rem;
+  }
+
+  #chat-bubble {
+    grid-template-columns: 72px 1fr;
+    padding: 16px 16px 14px;
+    border-radius: 22px;
+    border-width: 4px;
+    gap: 12px;
+    bottom: 3%;
+  }
+
+  .chat-avatar-wrap {
+    width: 72px;
+    height: 72px;
+    border-radius: 14px;
+  }
+
+  .chat-avatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  .chat-name {
+    font-size: 1.45rem;
+  }
+
+  .chat-text {
+    font-size: 1rem;
+    line-height: 1.35;
+  }
+
+  .chat-continue {
+    font-size: 0.9rem;
+    gap: 8px;
+  }
+
+  .chat-key {
+    padding: 5px 10px;
+  }
+}

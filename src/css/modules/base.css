@@ -1,0 +1,55 @@
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Baloo 2", "Nunito", "Trebuchet MS", "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #d4e4f8 0%, #ebd9ea 100%);
+  overflow: hidden;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+body:not(.modal-open) {
+  overflow: auto;
+}
+
+body::before {
+  display: none;
+}
+
+#canvas-container {
+  position: fixed;
+  inset: 0;
+  display: block;
+}
+
+#fade-screen {
+  z-index: 80;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Pregame hiding */
+body.pregame #ui-top,
+body.pregame #tool-dock,
+body.pregame #ui-panels {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Hide intro elements when game has started */
+body:not(.pregame) #intro-screen {
+  display: none !important;
+}
+
+body:not(.pregame) .overlay-balloons {
+  display: none !important;
+}

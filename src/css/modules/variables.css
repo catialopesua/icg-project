@@ -1,0 +1,18 @@
+:root {
+  --ui-ink: #2f2f3a;
+  --ui-warm: #e95f7c;
+  --ui-sky: #79cde8;
+  --ui-shadow: 0 20px 46px rgba(16, 19, 32, 0.22);
+
+  --accent-pink: #f11f84;
+  --accent-violet: #7f2fff;
+  --panel-bg: #f6f6f8;
+  --panel-line: #e8b7e8;
+  --ink-strong: #4d1a90;
+  --ink-soft: #7a33dc;
+  --chip-bg: #f5cf27;
+  --tool-blue: #0fa3de;
+  --tool-fuchsia: #e92897;
+  --tool-purple: #8b33ef;
+  --tool-orange: #f26f00;
+}
