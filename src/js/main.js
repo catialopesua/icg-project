@@ -21,6 +21,37 @@ import { FRIEND_DEFS, loadFriendPlacements, loadPlayerStart, loadTimPlacement } 
 import { PARK_CENTER_X, PARK_CENTER_Z, loadPartyLayout } from './party.js';
 import { preparePartyScene, updatePartyProps, loadPartyCakeAsset } from './core/party_system.js';
 
+// ── KeyboardEvent WebKit / iOS Safari Polyfill ─────────────────────────────
+(function() {
+  if (typeof window !== 'undefined' && 'KeyboardEvent' in window) {
+    const OriginalKeyboardEvent = window.KeyboardEvent;
+    try {
+      const testEvent = new OriginalKeyboardEvent('keydown', { code: 'KeyW' });
+      if (testEvent.code !== 'KeyW') {
+        const keyCodes = {
+          'KeyW': 87, 'ArrowUp': 38,
+          'KeyA': 65, 'ArrowLeft': 37,
+          'KeyS': 83, 'ArrowDown': 40,
+          'KeyD': 68, 'ArrowRight': 39,
+          'Space': 32, 'KeyE': 69
+        };
+        window.KeyboardEvent = function(type, dict) {
+          const event = new OriginalKeyboardEvent(type, dict);
+          if (dict && dict.code) {
+            Object.defineProperty(event, 'code', { value: dict.code, enumerable: true });
+            Object.defineProperty(event, 'key', { value: dict.code, enumerable: true });
+            const codeVal = keyCodes[dict.code] || 0;
+            Object.defineProperty(event, 'keyCode', { value: codeVal, enumerable: true });
+            Object.defineProperty(event, 'which', { value: codeVal, enumerable: true });
+          }
+          return event;
+        };
+        window.KeyboardEvent.prototype = OriginalKeyboardEvent.prototype;
+      }
+    } catch (e) {}
+  }
+})();
+
 console.log('Main.js initializing...');
 
 // ---------------------------------------------------------------------------
@@ -69,6 +100,13 @@ const isMobileDevice = isMobile();
 if (isMobileDevice) {
   mobileControlsContainer = initMobileControls(camera);
   mobileControlsContainer.style.display = 'none';
+
+  // Swap all "Click" prompts to "Tap" so the UI makes sense on touch devices.
+  const playPrompt = document.getElementById('play-prompt');
+  if (playPrompt) playPrompt.textContent = 'Tap anywhere to play';
+
+  const pausePrompt = document.getElementById('pause-prompt');
+  if (pausePrompt) pausePrompt.textContent = 'Tap anywhere to resume';
 }
 
 const triggerFirstJoin = () => {
@@ -87,13 +125,15 @@ const triggerFirstJoin = () => {
 
     if (isMobileDevice && mobileControlsContainer) {
       mobileControlsContainer.style.display = 'block';
+      // Replace the keyboard hint with a short abbreviation that fits the INT button
       const hint = document.getElementById('interact-hint');
       if (hint) hint.innerText = 'INT';
-      
+
+      // #interact-ui tooltip — shown when close to an NPC
       const intUI = document.getElementById('interact-ui');
-      if (intUI) intUI.innerText = 'Tap Interact to interact';
-      
-      // Fake pointer lock state for mobile interactions
+      if (intUI) intUI.innerText = 'Tap INT to interact';
+
+      // Fake pointer lock state so interaction checks pass on mobile
       controls.isLocked = true;
     }
   }
@@ -106,7 +146,7 @@ const { controls, updateMovement } = initPointerLock({
   onLockAcquired: hidePauseOverlay,
   onLockReleased: () => {},
   playButton: document.getElementById('play-button'),
-  instructions: document.getElementById('instructions'),
+  instructions: document.getElementById('blocker'), // Use blocker instead of non-existent instructions ID
   pauseOverlay: document.getElementById('pause-overlay'),
   isMobileDevice
 });
@@ -302,23 +342,25 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// For mobile play button interception
+// For mobile play/resume tap interception
 if (isMobileDevice) {
   const startMobileGame = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    triggerFirstJoin();
-    hidePauseOverlay();
+    if (controls) controls.lock();
   };
 
-  const playBtn = document.getElementById('play-button');
-  if (playBtn) playBtn.addEventListener('click', startMobileGame);
-
-  const instructionsEl = document.getElementById('instructions');
-  if (instructionsEl) instructionsEl.addEventListener('click', startMobileGame);
+  const blockerEl = document.getElementById('blocker');
+  if (blockerEl) {
+    blockerEl.addEventListener('touchstart', startMobileGame, { passive: false });
+    blockerEl.addEventListener('click', startMobileGame);
+  }
 
   const pauseOverlayEl = document.getElementById('pause-overlay');
-  if (pauseOverlayEl) pauseOverlayEl.addEventListener('click', startMobileGame);
+  if (pauseOverlayEl) {
+    pauseOverlayEl.addEventListener('touchstart', startMobileGame, { passive: false });
+    pauseOverlayEl.addEventListener('click', startMobileGame);
+  }
 }
 
 window.addEventListener('blur', () => {

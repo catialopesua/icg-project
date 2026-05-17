@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isMobile } from './mobileControls.js';
 
 // ---------------------------------------------------------------------------
 // Panel registry
@@ -253,15 +254,39 @@ export function showChatBubble(
   speaker = 'Birthday Boy'
 ) {
   if (!_chatBubble) return;
+
+  // On touch devices render a tappable button instead of the keyboard hint.
+  // The button dispatches a synthetic KeyE event so all existing game logic
+  // (interaction.js) continues to work without modification.
+  const continueHint = isMobile()
+    ? `<button class="chat-continue-btn" id="chat-continue-tap" type="button">👆 Tap to continue</button>`
+    : `<p class="chat-continue"><span class="chat-key">Press E</span><span>to continue</span></p>`;
+
   _chatBubble.innerHTML = `
     <div class="chat-avatar-wrap"><img class="chat-avatar" src="${imageSrc}" alt="${speaker}" /></div>
     <div class="chat-body">
       <h3 class="chat-name">${speaker}</h3>
       <div class="chat-divider" aria-hidden="true"></div>
       <div class="chat-text">${String(text)}</div>
-      <p class="chat-continue"><span class="chat-key">Press E</span><span>to continue</span></p>
+      ${continueHint}
     </div>
   `;
+
+  // Wire up the mobile tap button after inserting it into the DOM
+  if (isMobile()) {
+    const tapBtn = _chatBubble.querySelector('#chat-continue-tap');
+    if (tapBtn) {
+      tapBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' }));
+      }, { passive: false });
+      tapBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' }));
+      }, { passive: false });
+    }
+  }
+
   _chatBubble.classList.remove('hidden');
   clearTimeout(_chatBubble._hideTO);
   if (duration > 0) {
@@ -334,7 +359,7 @@ export function syncWeatherUnlockUI(unlockedWeatherIds) {
     btn.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
     if (unlocked) unlockedCount++;
     const small = btn.querySelector('small');
-    if (small) small.textContent = unlocked ? 'Click to activate' : '🔒 Locked';
+    if (small) small.textContent = unlocked ? (isMobile() ? 'Tap to activate' : 'Click to activate') : '🔒 Locked';
   });
 
   if (_weatherUnlockedCount) {

@@ -4,7 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <title>Birthday Boy — Three.js Scene</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <!-- viewport-fit=cover ensures content fills the iPhone notch/home-bar area;
+         safe-area-inset env() values then push UI elements inward as needed. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -211,29 +213,10 @@
     <div id="canvas-container"></div>
 
 
-    <div id="interact-ui" style="
-    position: fixed;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 10px 16px;
-    background: rgba(0,0,0,0.7);
-    color: white;
-    border-radius: 6px;
-    font-family: sans-serif;
-    display: none;
-    ">
-        Press E to interact
-    </div>
+    <!-- Text is swapped to "Tap to play" on mobile by JS in main.js -->
+    <div id="interact-ui">Press E to interact</div>
 
-    <div id="fade-screen" style="
-    position: fixed;
-    inset: 0;
-    background: black;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.4s ease;
-    "></div>
+    <div id="fade-screen"></div>
 
     <div id="chat-bubble" class="hidden" aria-live="polite"></div>
 
@@ -256,7 +239,8 @@
 
             <div id="intro-screen" class="instructions-view hidden">
                 <h1 id="start-title"><span>Tim's Birthday</span><span>Scavenger Hunt</span></h1>
-                <p class="welcome-line">Click anywhere to play</p>
+                <!-- JS in main.js swaps this text to "Tap anywhere to play" on mobile -->
+                <p class="welcome-line" id="play-prompt">Click anywhere to play</p>
                 <p class="title-credit">ICG - 2026</p>
                 <button id="play-button" class="play-action" type="button">Play</button>
             </div>
@@ -267,7 +251,8 @@
     <div id="pause-overlay" class="hidden" aria-hidden="true">
         <div id="pause-modal" role="dialog" aria-modal="true" aria-label="Paused">
             <p class="pause-title">Paused</p>
-            <p class="pause-subtitle">Click anywhere to play</p>
+            <!-- JS swaps this to "Tap anywhere to resume" on mobile -->
+            <p class="pause-subtitle" id="pause-prompt">Click anywhere to play</p>
         </div>
     </div>
 

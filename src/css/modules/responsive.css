@@ -1,4 +1,137 @@
-/* Responsive overrides */
+/* ─────────────────────────────────────────────────────────────────────────────
+   Mobile controls overlay
+   These styles were previously JS-injected by mobileControls.js.
+   They are unconditional because #mobile-controls only exists in the DOM
+   when initMobileControls() is called (i.e. on touch devices).
+───────────────────────────────────────────────────────────────────────────── */
+
+#mobile-controls {
+  position: fixed;
+  inset: 0;
+  /* Below ui-panels (z-index 23) so panels receive touch events */
+  z-index: 20;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  /* Disable all default touch behaviours on the overlay itself;
+     individual children re-enable what they need. */
+  touch-action: none;
+}
+
+/* Right half — camera look drag zone */
+#mc-look-zone {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 55%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+/* Joystick base */
+#mc-joystick-area {
+  position: absolute;
+  bottom: max(40px, env(safe-area-inset-bottom, 40px));
+  left: 30px;
+  width: 130px;
+  height: 130px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  pointer-events: auto;
+  /* touch-action is NOT inherited — must be explicit on this element so the
+     browser does not intercept touchmove and suppress our keydown dispatch. */
+  touch-action: none;
+}
+
+/* Joystick knob */
+#mc-joystick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 54px;
+  height: 54px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: background 0.1s ease;
+}
+
+/* Shared action button styles */
+.mc-btn {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  color: white;
+  font-weight: 800;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: auto;
+  font-family: "Baloo 2", "Nunito", sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.1s ease, transform 0.1s ease;
+}
+
+.mc-btn:active {
+  background: rgba(255, 255, 255, 0.48);
+  transform: scale(0.93);
+}
+
+/* Jump — bottom-right area, clear of joystick.
+   z-index: 1 ensures it stacks above the look zone (same parent, later in DOM
+   is already on top, but explicit z-index is more robust). */
+#mc-btn-jump {
+  bottom: max(40px, env(safe-area-inset-bottom, 40px));
+  right: 120px;
+  z-index: 1;
+}
+
+/* Interact — above jump, pill-shaped for easy identification */
+#mc-btn-interact {
+  bottom: max(120px, calc(env(safe-area-inset-bottom, 0px) + 80px));
+  right: 30px;
+  width: 86px;
+  border-radius: 28px;
+  font-size: 11px;
+  z-index: 1;
+}
+
+/* #interact-ui — "Press E / Tap Interact" proximity hint bar
+   Previously had inline styles in play.html; now managed here. */
+#interact-ui {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border-radius: 6px;
+  font-family: "Baloo 2", "Nunito", sans-serif;
+  /* Hidden by default; shown via JS display:block */
+  display: none;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 29;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Responsive overrides
+   Breakpoints:
+     ≤900px  → Tablet / large phone landscape
+     ≤600px  → Phone portrait (primary mobile target)
+     max-height ≤500px  → Landscape phone (compact vertical layout)
+───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Tablet (≤ 900px) ─────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   #tool-dock {
     left: 10px;
@@ -16,15 +149,6 @@
 
   .quest-main {
     font-size: 1.45rem;
-  }
-
-  .chip-action {
-    font-size: 0.92rem;
-    padding: 7px 10px;
-  }
-
-  .chip-action .material-symbols-rounded {
-    font-size: 1.22rem;
   }
 
   .volume-control {
@@ -55,8 +179,8 @@
   }
 
   .panel-close {
-    width: 42px;
-    height: 42px;
+    width: 46px;
+    height: 46px;
     font-size: 1.4rem;
   }
 
@@ -65,7 +189,6 @@
   }
 
   #chat-bubble,
-  #ui-panels,
   #interact-hint {
     pointer-events: auto;
   }
@@ -126,11 +249,11 @@
 
   #chat-bubble {
     grid-template-columns: 72px 1fr;
-    padding: 16px 16px 14px;
+    padding: 16px clamp(12px, 3vw, 48px);
     border-radius: 22px;
     border-width: 4px;
     gap: 12px;
-    bottom: 3%;
+    bottom: max(3%, env(safe-area-inset-bottom, 12px));
   }
 
   .chat-avatar-wrap {
@@ -160,5 +283,263 @@
 
   .chat-key {
     padding: 5px 10px;
+  }
+}
+
+/* ── Phone portrait (≤ 600px) ─────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  /* Tool dock — smaller buttons, hide keyboard shortcut labels */
+  #tool-dock {
+    top: 8px;
+    left: 8px;
+    gap: 6px;
+  }
+
+  .tool-key {
+    /* Keyboard shortcut labels are meaningless on touch — hide them */
+    display: none;
+  }
+
+  .tool-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .tool-icon {
+    font-size: 22px;
+  }
+
+  /* Quest card — right-aligned compact badge, no "Current Quest" label */
+  #ui-top {
+    justify-content: flex-end;
+    padding: 0 8px;
+  }
+
+  .quest-card {
+    width: auto;
+    max-width: 52vw;
+    padding: 5px 10px;
+    gap: 6px;
+    border-radius: 12px;
+  }
+
+  .quest-label {
+    display: none;
+  }
+
+  .quest-orb {
+    width: 22px;
+    height: 22px;
+    font-size: 0.75rem;
+  }
+
+  .quest-main {
+    font-size: 1rem;
+    white-space: normal;
+  }
+
+  /* Panels — full-width, bottom-anchored on small screens */
+  #ui-panels {
+    padding: 0 0 0 0;
+    justify-content: center;
+    align-items: flex-end;
+  }
+
+  .floating-panel {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 72vh;
+    border-radius: 24px 24px 0 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    padding: 16px 14px;
+    /* Push up by safe area so content is not behind the home bar */
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+  }
+
+  .panel-title-row h2 {
+    font-size: 1.5rem;
+  }
+
+  .panel-close {
+    width: 44px;
+    height: 44px;
+    font-size: 1.5rem;
+  }
+
+  /* Weather options — taller rows for fat fingers */
+  .weather-option {
+    grid-template-columns: 54px 1fr;
+    gap: 12px;
+    padding: 12px 10px;
+    min-height: 56px;
+  }
+
+  .weather-option strong {
+    font-size: 1.2rem;
+  }
+
+  .weather-option small {
+    font-size: 0.9rem;
+  }
+
+  .option-icon {
+    width: 54px;
+    height: 54px;
+    font-size: 1.9rem;
+    border-radius: 14px;
+  }
+
+  /* Friends panel */
+  .friend-card {
+    grid-template-columns: 56px 1fr;
+    padding: 10px;
+  }
+
+  .friend-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+  }
+
+  .friend-name {
+    font-size: 1.2rem;
+  }
+
+  .friend-desc {
+    font-size: 0.9rem;
+  }
+
+  /* Settings — stack label and control vertically */
+  .setting-row {
+    grid-template-columns: 1fr;
+    justify-items: start;
+    gap: 10px;
+  }
+
+  .volume-control {
+    width: 100%;
+    justify-items: start;
+  }
+
+  .volume-slider {
+    width: 100%;
+  }
+
+  /* Chat bubble — compact for small screens */
+  #chat-bubble {
+    grid-template-columns: 52px 1fr;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 20px;
+    bottom: max(20px, env(safe-area-inset-bottom, 20px));
+    width: 96vw;
+  }
+
+  .chat-avatar-wrap {
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+  }
+
+  .chat-avatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  .chat-name {
+    font-size: 1.2rem;
+  }
+
+  .chat-text {
+    font-size: 0.95rem;
+  }
+
+  /* Interact hint — push left so it doesn't overlap the right-side look zone */
+  #interact-hint {
+    left: 25%;
+    transform: translateX(-50%);
+    bottom: 35%;
+  }
+
+  /* Help panel — readable text sizes */
+  .help-block h3 {
+    font-size: 1.2rem;
+  }
+
+  .help-block p {
+    font-size: 0.92rem;
+  }
+
+  .keycap {
+    font-size: 1rem;
+    padding: 2px 6px;
+    min-width: 48px;
+  }
+
+  /* Save settings button — full-width, easy to tap */
+  .save-settings {
+    padding: 13px;
+    font-size: 1.1rem;
+    border-radius: 14px;
+  }
+}
+
+/* ── Landscape phone (short screens, max-height ≤ 500px) ─────────────────── */
+@media (max-height: 500px) and (max-width: 900px) {
+  #ui-top {
+    top: 4px;
+  }
+
+  #tool-dock {
+    top: 4px;
+    left: 6px;
+    gap: 4px;
+  }
+
+  .tool-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .tool-icon {
+    font-size: 18px;
+  }
+
+  .quest-card {
+    padding: 3px 8px;
+  }
+
+  .quest-main {
+    font-size: 0.9rem;
+  }
+
+  .floating-panel {
+    max-height: 88vh;
+  }
+
+  #chat-bubble {
+    bottom: max(6px, env(safe-area-inset-bottom, 6px));
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .chat-name {
+    font-size: 1rem;
+  }
+
+  .chat-text {
+    font-size: 0.88rem;
+  }
+
+  .chat-avatar-wrap {
+    width: 44px;
+    height: 44px;
+  }
+
+  .chat-avatar {
+    width: 32px;
+    height: 32px;
   }
 }

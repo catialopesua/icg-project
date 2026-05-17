@@ -56,12 +56,40 @@ export function initPointerLock(opts) {
     onLockReleased,
     playButton,
     instructions,
-    pauseOverlay
+    pauseOverlay,
+    isMobileDevice
   } = opts;
 
   _controls = new PointerLockControls(camera, document.body);
   _controls.pointerSpeed = getLookSensitivity();
   scene.add(_controls.getObject());
+
+  // On touch/mobile devices, pointer lock is unsupported or highly buggy.
+  // We mock the lock() and unlock() API calls to trigger game callbacks instantly.
+  if (isMobileDevice) {
+    let mockLocked = false;
+    Object.defineProperty(_controls, 'isLocked', {
+      get: () => mockLocked,
+      set: (v) => { mockLocked = Boolean(v); },
+      configurable: true
+    });
+
+    _controls.lock = () => {
+      if (!mockLocked) {
+        mockLocked = true;
+        onLockAcquired?.();
+        onFirstJoin?.();
+        _controls.dispatchEvent({ type: 'lock' });
+      }
+    };
+    _controls.unlock = () => {
+      if (mockLocked) {
+        mockLocked = false;
+        onLockReleased?.();
+        _controls.dispatchEvent({ type: 'unlock' });
+      }
+    };
+  }
 
   // Movement state
   const moveState = {

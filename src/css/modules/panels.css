@@ -15,6 +15,12 @@
   width: min(96vw, 580px);
   max-height: calc(100vh - 110px);
   overflow: auto;
+  /* iOS momentum scroll inside panels */
+  -webkit-overflow-scrolling: touch;
+  /* Allow vertical pan (scroll) inside panels without triggering the look zone */
+  touch-action: pan-y;
+  /* Prevent scroll from propagating to body/game canvas */
+  overscroll-behavior: contain;
   background: var(--panel-bg);
   border: 5px solid #2f9bed;
   border-radius: 30px;
@@ -70,12 +76,17 @@
 .panel-close {
   width: 50px;
   height: 50px;
+  /* Enforce minimum 44px tap target */
+  min-width: 44px;
+  min-height: 44px;
   border: 0;
   border-radius: 50%;
   font-size: 2rem;
   line-height: 1;
   color: #f31f90;
   cursor: pointer;
+  /* Instant tap on mobile */
+  touch-action: manipulation;
 }
 
 #weather-panel .panel-close {

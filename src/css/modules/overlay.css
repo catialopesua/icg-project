@@ -173,11 +173,16 @@
 #pause-modal {
   width: min(92vw, 360px);
   padding: 18px 16px;
+  /* Respect iOS home indicator at bottom */
+  padding-bottom: max(18px, env(safe-area-inset-bottom, 18px));
   border-radius: 20px;
   border: 2px solid #d8c7ff;
   background: #f6f5f9;
   text-align: center;
   box-shadow: 0 14px 26px rgba(12, 8, 26, 0.28);
+  /* Instant tap to resume */
+  touch-action: manipulation;
+  cursor: pointer;
 }
 
 .pause-title {

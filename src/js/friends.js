@@ -102,8 +102,8 @@ const FRIEND_BY_ID = new Map(FRIEND_DEFS.map((def) => [def.id, def]));
 
 function getStorage() {
   try {
-    if (typeof window === 'undefined' || !window.localStorage) return null;
-    return window.localStorage;
+    if (typeof window === 'undefined' || !window.sessionStorage) return null;
+    return window.sessionStorage;
   } catch (e) {
     return null;
   }

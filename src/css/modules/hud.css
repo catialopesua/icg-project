@@ -127,6 +127,9 @@
 .tool-btn {
   width: 58px;
   height: 58px;
+  /* Minimum tappable area for accessibility on touch screens */
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
   border: 2px solid rgba(223, 247, 255, 0.9);
   color: #fff;
@@ -135,6 +138,8 @@
   background: linear-gradient(180deg, #30b7ec, #0598d6);
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.22);
   cursor: pointer;
+  /* Instant tap — eliminates 300ms click delay on mobile browsers */
+  touch-action: manipulation;
   transition: transform 0.18s ease, filter 0.2s ease;
 }
 

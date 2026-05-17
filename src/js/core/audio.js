@@ -100,7 +100,7 @@ export function playPartyMusic() {
 // Storage helpers
 export function loadSavedPercentage(storageKey) {
   try {
-    const stored = window.localStorage.getItem(storageKey);
+    const stored = window.sessionStorage.getItem(storageKey);
     if (stored == null) return null;
     const parsed = Number(stored);
     if (Number.isNaN(parsed)) return null;
@@ -112,7 +112,7 @@ export function loadSavedPercentage(storageKey) {
 
 export function savePercentage(storageKey, percentage) {
   try {
-    window.localStorage.setItem(storageKey, String(percentage));
+    window.sessionStorage.setItem(storageKey, String(percentage));
   } catch (e) {
     // Ignore persistence failures (private mode or blocked storage).
   }
