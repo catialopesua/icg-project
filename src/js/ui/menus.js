@@ -255,11 +255,10 @@ export function showChatBubble(
 ) {
   if (!_chatBubble) return;
 
-  // On touch devices render a tappable button instead of the keyboard hint.
-  // The button dispatches a synthetic KeyE event so all existing game logic
-  // (interaction.js) continues to work without modification.
+  // On touch devices we render a visual button.
+  // The event listener is handled globally on the chat bubble in interaction.js
   const continueHint = isMobile()
-    ? `<button class="chat-continue-btn" id="chat-continue-tap" type="button">👆 Tap to continue</button>`
+    ? `<button class="chat-continue-btn" type="button">👆 Tap to continue</button>`
     : `<p class="chat-continue"><span class="chat-key">Press E</span><span>to continue</span></p>`;
 
   _chatBubble.innerHTML = `
@@ -271,21 +270,6 @@ export function showChatBubble(
       ${continueHint}
     </div>
   `;
-
-  // Wire up the mobile tap button after inserting it into the DOM
-  if (isMobile()) {
-    const tapBtn = _chatBubble.querySelector('#chat-continue-tap');
-    if (tapBtn) {
-      tapBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' }));
-      }, { passive: false });
-      tapBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' }));
-      }, { passive: false });
-    }
-  }
 
   _chatBubble.classList.remove('hidden');
   clearTimeout(_chatBubble._hideTO);
@@ -387,6 +371,7 @@ export function showWeatherUnlockToast(weatherLabel) {
 // Interact hint
 // ---------------------------------------------------------------------------
 export function showInteractHint() {
+  if (isMobile()) return; // User requested no interact hint on mobile (they just use the INT button)
   if (_interactHint) _interactHint.classList.remove('hidden');
 }
 export function hideInteractHint() {

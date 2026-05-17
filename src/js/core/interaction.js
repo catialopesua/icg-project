@@ -139,7 +139,7 @@ export function checkInteraction(cam, sc) {
 }
 
 // E-key stair teleport listener
-window.addEventListener('keydown', (e) => {
+document.addEventListener('keydown', (e) => {
   if (e.code !== 'KeyE' || !_canInteract) return;
   const trigger = scene.userData.stairTrigger;
   if (!trigger) return;
@@ -208,8 +208,13 @@ export function clearActiveDialogue() {
 }
 
 // Extract dialogue progression logic
+let _lastChatAdvance = 0;
 const advanceDialogue = () => {
   try {
+    const now = Date.now();
+    if (now - _lastChatAdvance < 350) return; // 350ms centralized debounce
+    _lastChatAdvance = now;
+
     if (_activeDialogue) {
       const cfg = _getDialogueConfig?.(_activeDialogue);
       if (!cfg) {
@@ -237,15 +242,10 @@ const advanceDialogue = () => {
 };
 
 // Screen tap to advance chat
-let _lastChatAdvance = 0;
 const handleChatAdvance = (ev) => {
-  ev.preventDefault(); // Prevent double-firing from bubbling or synthetic clicks
+  ev.preventDefault();
+  ev.stopPropagation();
   if (!isChatBubbleVisible()) return;
-
-  const now = Date.now();
-  if (now - _lastChatAdvance < 300) return; // Debounce
-  _lastChatAdvance = now;
-
   advanceDialogue();
 };
 
