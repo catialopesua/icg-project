@@ -48,79 +48,19 @@ export function createGardenZone(scene, cx, cz){
     const placed = [];
     const flowerPalette = [0xff82b2, 0xfff2a6, 0xb7e7ff, 0xdfb8ff, 0xffb77f];
 
-    function makeBushTextureSet(size = 256){
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = size;
-      const ctx = canvas.getContext('2d');
+    const textureLoader = new THREE.TextureLoader();
+    const mossColor = textureLoader.load('./textures/Moss003_1K-JPG/Moss003_1K-JPG_Color.jpg');
+    mossColor.colorSpace = THREE.SRGBColorSpace;
+    mossColor.wrapS = mossColor.wrapT = THREE.RepeatWrapping;
+    mossColor.repeat.set(2.2, 2.2);
 
-      ctx.fillStyle = '#2f5f31';
-      ctx.fillRect(0, 0, size, size);
+    const mossNormal = textureLoader.load('./textures/Moss003_1K-JPG/Moss003_1K-JPG_NormalGL.jpg');
+    mossNormal.wrapS = mossNormal.wrapT = THREE.RepeatWrapping;
+    mossNormal.repeat.set(2.2, 2.2);
 
-      // Broad leaf variation.
-      for (let i = 0; i < 2100; i++){
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const r = 0.7 + Math.random() * 2.2;
-        const hue = 100 + Math.floor(Math.random() * 26);
-        const sat = 35 + Math.floor(Math.random() * 25);
-        const lit = 24 + Math.floor(Math.random() * 20);
-        ctx.fillStyle = `hsl(${hue}, ${sat}%, ${lit}%)`;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Dark clumps for depth.
-      for (let i = 0; i < 420; i++){
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const r = 1.8 + Math.random() * 3.2;
-        ctx.fillStyle = 'rgba(20, 48, 21, 0.30)';
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Tiny bright highlights.
-      for (let i = 0; i < 260; i++){
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const r = 0.55 + Math.random() * 1.2;
-        ctx.fillStyle = 'rgba(190, 255, 165, 0.20)';
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Subtle blossoms in the texture itself.
-      for (let i = 0; i < 90; i++){
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const flowerColor = flowerPalette[Math.floor(Math.random() * flowerPalette.length)];
-        const flowerHex = `#${flowerColor.toString(16).padStart(6, '0')}`;
-        ctx.fillStyle = flowerHex;
-        ctx.beginPath();
-        ctx.arc(x, y, 0.9 + Math.random() * 1.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(255, 250, 228, 0.95)';
-        ctx.beginPath();
-        ctx.arc(x, y, 0.35 + Math.random() * 0.35, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      const foliageMap = new THREE.CanvasTexture(canvas);
-      foliageMap.colorSpace = THREE.SRGBColorSpace;
-      foliageMap.wrapS = foliageMap.wrapT = THREE.RepeatWrapping;
-      foliageMap.repeat.set(2.2, 2.2);
-
-      const foliageBump = new THREE.CanvasTexture(canvas);
-      foliageBump.wrapS = foliageBump.wrapT = THREE.RepeatWrapping;
-      foliageBump.repeat.copy(foliageMap.repeat);
-
-      return { foliageMap, foliageBump };
-    }
-
-    const { foliageMap, foliageBump } = makeBushTextureSet(256);
+    const mossRoughness = textureLoader.load('./textures/Moss003_1K-JPG/Moss003_1K-JPG_Roughness.jpg');
+    mossRoughness.wrapS = mossRoughness.wrapT = THREE.RepeatWrapping;
+    mossRoughness.repeat.set(2.2, 2.2);
     const flowerPetalGeo = new THREE.SphereGeometry(0.028, 8, 7);
     const flowerCenterGeo = new THREE.SphereGeometry(0.018, 8, 7);
     const flowerCenterMat = new THREE.MeshStandardMaterial({ color: 0xfff6d6, roughness: 0.75, metalness: 0.01 });
@@ -205,16 +145,16 @@ export function createGardenZone(scene, cx, cz){
     }
 
     function makeBush(radius){
-      const hue = THREE.MathUtils.randFloat(0.28, 0.34);
-      const sat = THREE.MathUtils.randFloat(0.40, 0.55);
-      const lit = THREE.MathUtils.randFloat(0.22, 0.33);
-      const color = new THREE.Color().setHSL(hue, sat, lit);
+      // Give a slight brightness variation rather than full HSL color replacement
+      // since the Moss003 texture is already fully colored.
+      const shade = THREE.MathUtils.randFloat(0.85, 1.0);
+      const color = new THREE.Color(shade, shade, shade);
       const mat = new THREE.MeshStandardMaterial({
         color,
-        map: foliageMap,
-        bumpMap: foliageBump,
-        bumpScale: 0.08,
-        roughness: 0.94,
+        map: mossColor,
+        normalMap: mossNormal,
+        roughnessMap: mossRoughness,
+        roughness: 1.0,
         metalness: 0.02
       });
 
