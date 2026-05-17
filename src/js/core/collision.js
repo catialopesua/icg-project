@@ -54,7 +54,7 @@ function matchesCollisionExclusionByName(obj) {
   }
   const label = names.join(' ');
   if (!label) return false;
-  return /(towel|trashbin|trash_bin|\bbin\b|\broad\b|\blane\b|asphalt|grass|rock|stone|streetlight|street_light|lamp|lamp-post|lamp_post|pole|bulb|cone|foliage|leaf)/i.test(
+  return /(towel|trashbin|trash_bin|\bbin\b|\broad\b|\blane\b|asphalt|grass|streetlight|street_light|lamp|lamp-post|lamp_post|pole|bulb|cone|foliage|leaf)/i.test(
     label
   );
 }
@@ -96,6 +96,31 @@ export function rebuildWorldCollisionBoxes() {
     _tempBox.getSize(_tempSize);
     if (_tempSize.y < 0.04) return;
     if (Math.max(_tempSize.x, _tempSize.z) < 0.08) return;
+
+    // Check if it's a tree to reduce its collision box (so player can walk under canopy)
+    let isTree = false;
+    let cur = obj;
+    let steps = 0;
+    while (cur && steps < 8) {
+      if (typeof cur.name === 'string' && /tree/i.test(cur.name)) {
+        isTree = true;
+        break;
+      }
+      cur = cur.parent;
+      steps++;
+    }
+
+    if (isTree) {
+      const centerX = (_tempBox.min.x + _tempBox.max.x) / 2;
+      const centerZ = (_tempBox.min.z + _tempBox.max.z) / 2;
+      const extentX = (_tempSize.x * 0.30) / 2; // shrink X to 30%
+      const extentZ = (_tempSize.z * 0.30) / 2; // shrink Z to 30%
+
+      _tempBox.min.x = centerX - extentX;
+      _tempBox.max.x = centerX + extentX;
+      _tempBox.min.z = centerZ - extentZ;
+      _tempBox.max.z = centerZ + extentZ;
+    }
 
     worldCollisionBoxes.push(_tempBox.clone());
   });

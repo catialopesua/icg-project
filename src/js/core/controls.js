@@ -181,20 +181,32 @@ export function initPointerLock(opts) {
       const playerObj = _controls.getObject();
       const currentHeight = typeof playerHeight === 'function' ? playerHeight() : playerHeight;
 
-      const bx = playerObj.position.clone();
+      const startPos = playerObj.position.clone();
+
+      // Calculate desired target position by applying local translations
       playerObj.translateX(velocity.x * dt);
-      if (isPlayerBlockedAt(playerObj.position, currentHeight)) {
-        playerObj.position.copy(bx);
-        velocity.x = 0;
-      }
-
-      const bz = playerObj.position.clone();
       playerObj.translateZ(velocity.z * dt);
+      const targetPos = playerObj.position.clone();
+      
+      // Reset position to apply world-axis aligned movements separately
+      playerObj.position.copy(startPos);
+
+      const worldDeltaX = targetPos.x - startPos.x;
+      const worldDeltaZ = targetPos.z - startPos.z;
+
+      // Apply World X movement
+      playerObj.position.x += worldDeltaX;
       if (isPlayerBlockedAt(playerObj.position, currentHeight)) {
-        playerObj.position.copy(bz);
-        velocity.z = 0;
+        playerObj.position.x = startPos.x;
       }
 
+      // Apply World Z movement
+      playerObj.position.z += worldDeltaZ;
+      if (isPlayerBlockedAt(playerObj.position, currentHeight)) {
+        playerObj.position.z = startPos.z;
+      }
+
+      // Apply World Y movement
       const beforeY = playerObj.position.y;
       playerObj.position.y += velocity.y * dt;
       if (isPlayerBlockedAt(playerObj.position, currentHeight)) {
