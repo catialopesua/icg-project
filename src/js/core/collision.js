@@ -97,7 +97,7 @@ export function rebuildWorldCollisionBoxes() {
     if (_tempSize.y < 0.04) return;
     if (Math.max(_tempSize.x, _tempSize.z) < 0.08) return;
 
-    // Check if it's a tree to reduce its collision box (so player can walk under canopy)
+    // Check if it's a tree to reduce its collision box
     let isTree = false;
     let cur = obj;
     let steps = 0;

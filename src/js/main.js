@@ -4,6 +4,7 @@ import { initAudioListener, setupAudioSettings, setupSensitivitySettings, playNe
 import { initPointerLock } from './core/controls.js';
 import { initMenus, showIntroOverlay, setQuestText, renderFriendsPanel, syncWeatherUnlockUI, showWeatherUnlockToast, closePanelsAndRelockIfNeeded, hidePauseOverlay, showPauseOverlay, setIsLockedChecker } from './ui/menus.js';
 import { initSettings } from './ui/settings.js';
+import { isMobile, initMobileControls } from './ui/mobileControls.js';
 import { initWeather, updateWeather, applyWeather } from './core/weather.js';
 import { initInteraction, checkInteraction, updateInteractHint, patchInteractionRefs } from './core/interaction.js';
 import { rebuildWorldCollisionBoxes } from './core/collision.js';
@@ -62,32 +63,52 @@ const beachZone = createBeachZone(scene, 0, 12);
 // ---------------------------------------------------------------------------
 initAudioListener(camera);
 
+let mobileControlsContainer = null;
+const isMobileDevice = isMobile();
+
+if (isMobileDevice) {
+  mobileControlsContainer = initMobileControls(camera);
+  mobileControlsContainer.style.display = 'none';
+}
+
+const triggerFirstJoin = () => {
+  if (!hasJoinedOnce) {
+    const start = loadPlayerStart();
+    controls.getObject().position.set(start.x || -18, (start.y || 0) + playerHeight, start.z || 20);
+    controls.getObject().rotation.y = start.rotationY || 0;
+    controls.getObject().rotation.x = 0;
+    controls.getObject().rotation.z = 0;
+    hasJoinedOnce = true;
+    
+    const blockerEl = document.getElementById('blocker');
+    if (blockerEl) blockerEl.classList.add('hidden');
+    document.body.classList.remove('pregame');
+    playNewQuestSound();
+
+    if (isMobileDevice && mobileControlsContainer) {
+      mobileControlsContainer.style.display = 'block';
+      const hint = document.getElementById('interact-hint');
+      if (hint) hint.innerText = 'INT';
+      
+      const intUI = document.getElementById('interact-ui');
+      if (intUI) intUI.innerText = 'Tap Interact to interact';
+      
+      // Fake pointer lock state for mobile interactions
+      controls.isLocked = true;
+    }
+  }
+};
+
 const { controls, updateMovement } = initPointerLock({
   playerHeight: () => playerHeight,
   isInputBlocked: () => false,
-  onFirstJoin: () => {
-    if (!hasJoinedOnce) {
-      const start = loadPlayerStart();
-      controls.getObject().position.set(start.x || -18, (start.y || 0) + playerHeight, start.z || 20);
-      controls.getObject().rotation.y = start.rotationY || 0;
-      controls.getObject().rotation.x = 0;
-      controls.getObject().rotation.z = 0;
-      hasJoinedOnce = true;
-      // Hide the intro overlay — this also stops the orbit camera in engine.js
-      const blockerEl = document.getElementById('blocker');
-      if (blockerEl) blockerEl.classList.add('hidden');
-      document.body.classList.remove('pregame');
-      playNewQuestSound();
-    }
-  },
+  onFirstJoin: triggerFirstJoin,
   onLockAcquired: hidePauseOverlay,
-  onLockReleased: () => {
-    // We no longer auto-pause on lock release (Esc).
-    // The user requested pause ONLY when leaving the page.
-  },
+  onLockReleased: () => {},
   playButton: document.getElementById('play-button'),
   instructions: document.getElementById('instructions'),
-  pauseOverlay: document.getElementById('pause-overlay')
+  pauseOverlay: document.getElementById('pause-overlay'),
+  isMobileDevice
 });
 
 setIsLockedChecker(() => controls.isLocked);
@@ -280,6 +301,25 @@ document.addEventListener('keydown', (e) => {
     controls.unlock();
   }
 });
+
+// For mobile play button interception
+if (isMobileDevice) {
+  const startMobileGame = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    triggerFirstJoin();
+    hidePauseOverlay();
+  };
+
+  const playBtn = document.getElementById('play-button');
+  if (playBtn) playBtn.addEventListener('click', startMobileGame);
+
+  const instructionsEl = document.getElementById('instructions');
+  if (instructionsEl) instructionsEl.addEventListener('click', startMobileGame);
+
+  const pauseOverlayEl = document.getElementById('pause-overlay');
+  if (pauseOverlayEl) pauseOverlayEl.addEventListener('click', startMobileGame);
+}
 
 window.addEventListener('blur', () => {
   if (hasJoinedOnce && !partyCutsceneStarted) {

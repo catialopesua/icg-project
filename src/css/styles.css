@@ -29,6 +29,14 @@ body {
   overflow: hidden;
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
+body:not(.modal-open) {
+  overflow: auto;
+}
+
 body::before {
   display: none;
 }
@@ -649,7 +657,8 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff; /* Solid white background */
+  background: #ffffff;
+  /* Solid white background */
 }
 
 #blocker.hidden {
@@ -853,9 +862,13 @@ body::before {
   color: #4f1f99;
   box-shadow: 0 14px 24px rgba(18, 10, 36, 0.24);
   display: grid;
+  touch-action: manipulation;
   grid-template-columns: 100px 1fr;
   gap: 20px;
   align-items: flex-start;
+  max-width: 95vw;
+  width: min(700px, 95vw);
+  bottom: env(safe-area-inset-bottom, 12px);
 }
 
 .chat-avatar-wrap {
@@ -1038,6 +1051,12 @@ body:not(.pregame) .overlay-balloons {
 
   .panel-badge {
     font-size: 1rem;
+  }
+
+  #chat-bubble,
+  #ui-panels,
+  #interact-hint {
+    pointer-events: auto;
   }
 
   .panel-note,

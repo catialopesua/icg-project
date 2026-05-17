@@ -156,26 +156,26 @@ window.addEventListener('keydown', (e) => {
     Boolean(trigger._isAtTop) ||
     Math.abs(playerPos.y - (trigger.target?.y ?? 0)) < 1.5;
 
-    setTimeout(() => {
-      const currentHeight = typeof _playerHeight === 'function' ? _playerHeight() : _playerHeight;
-      if (!atTop) {
-        try { trigger._lastGroundPosition = playerPos.clone(); } catch (_) { /* ignore */ }
-        trigger._isAtTop = true;
-        const dest = trigger.target?.clone?.() ??
-          new THREE.Vector3(trigger.position.x, trigger.position.y + 4, trigger.position.z);
-        const finalY = dest.y + currentHeight;
-        if (_controls?.getObject) _controls.getObject().position.set(dest.x, finalY, dest.z);
-        else camera.position.set(dest.x, finalY, dest.z);
-      } else {
-        const dest = trigger._lastGroundPosition?.clone?.() ??
-          trigger.position?.clone?.() ??
-          new THREE.Vector3(trigger.position.x, trigger.position.y, trigger.position.z);
-        trigger._isAtTop = false;
-        if (_controls?.getObject) _controls.getObject().position.set(dest.x, dest.y, dest.z);
-        else camera.position.set(dest.x, dest.y, dest.z);
-      }
-      if (_fadeScreen) _fadeScreen.style.opacity = '0';
-    }, 1000);
+  setTimeout(() => {
+    const currentHeight = typeof _playerHeight === 'function' ? _playerHeight() : _playerHeight;
+    if (!atTop) {
+      try { trigger._lastGroundPosition = playerPos.clone(); } catch (_) { /* ignore */ }
+      trigger._isAtTop = true;
+      const dest = trigger.target?.clone?.() ??
+        new THREE.Vector3(trigger.position.x, trigger.position.y + 4, trigger.position.z);
+      const finalY = dest.y + currentHeight;
+      if (_controls?.getObject) _controls.getObject().position.set(dest.x, finalY, dest.z);
+      else camera.position.set(dest.x, finalY, dest.z);
+    } else {
+      const dest = trigger._lastGroundPosition?.clone?.() ??
+        trigger.position?.clone?.() ??
+        new THREE.Vector3(trigger.position.x, trigger.position.y, trigger.position.z);
+      trigger._isAtTop = false;
+      if (_controls?.getObject) _controls.getObject().position.set(dest.x, dest.y, dest.z);
+      else camera.position.set(dest.x, dest.y, dest.z);
+    }
+    if (_fadeScreen) _fadeScreen.style.opacity = '0';
+  }, 1000);
 });
 
 // ---------------------------------------------------------------------------
@@ -207,13 +207,9 @@ export function clearActiveDialogue() {
   _activeDialogueIndex = -1;
 }
 
-// E-key dialogue handler
-document.addEventListener('keydown', (ev) => {
-  if (ev.code !== 'KeyE' || ev.repeat) return;
-  if (_canInteract) return; // stair trigger has priority
-
+// Extract dialogue progression logic
+const advanceDialogue = () => {
   try {
-    // Advance or finish active dialogue
     if (_activeDialogue) {
       const cfg = _getDialogueConfig?.(_activeDialogue);
       if (!cfg) {
@@ -221,9 +217,7 @@ document.addEventListener('keydown', (ev) => {
         hideChatBubble();
         return;
       }
-
       playChatContinueSound();
-
       if (_activeDialogueIndex < cfg.lines.length - 1) {
         _activeDialogueIndex++;
         showChatBubble(cfg.lines[_activeDialogueIndex], 0, cfg.image, cfg.speaker);
@@ -236,6 +230,40 @@ document.addEventListener('keydown', (ev) => {
           _requestRelock?.();
         }
       }
+    } else if (isChatBubbleVisible()) {
+      hideChatBubble();
+    }
+  } catch (_) { }
+};
+
+// Screen tap to advance chat
+let _lastChatAdvance = 0;
+const handleChatAdvance = (ev) => {
+  ev.preventDefault(); // Prevent double-firing from bubbling or synthetic clicks
+  if (!isChatBubbleVisible()) return;
+
+  const now = Date.now();
+  if (now - _lastChatAdvance < 300) return; // Debounce
+  _lastChatAdvance = now;
+
+  advanceDialogue();
+};
+
+const _chatBubbleEl = document.getElementById('chat-bubble');
+if (_chatBubbleEl) {
+  _chatBubbleEl.addEventListener('touchstart', handleChatAdvance, { passive: false });
+  _chatBubbleEl.addEventListener('click', handleChatAdvance);
+}
+
+// E-key dialogue handler
+document.addEventListener('keydown', (ev) => {
+  if (ev.code !== 'KeyE' || ev.repeat) return;
+  if (_canInteract) return; // stair trigger has priority
+
+  try {
+    // Advance or finish active dialogue
+    if (_activeDialogue) {
+      advanceDialogue();
       return;
     }
 
