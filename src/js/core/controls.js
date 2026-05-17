@@ -100,6 +100,7 @@ export function initPointerLock(opts) {
     sprint: false
   };
   let canJump = false;
+  let bobTimer = 0;
   const velocity = new THREE.Vector3();
   const direction = new THREE.Vector3();
 
@@ -205,6 +206,14 @@ export function initPointerLock(opts) {
       velocity.z *= speed / hSpeed;
     }
 
+    if (canJump && hSpeed > 0.1) {
+      bobTimer += (hSpeed * dt) * 3;
+    } else {
+      // Smoothly return to a neutral position (sin(x) = 0) without rewinding the whole timer
+      const targetBob = Math.round(bobTimer / Math.PI) * Math.PI;
+      bobTimer += (targetBob - bobTimer) * dt * 10;
+    }
+
     if (!isInputBlocked?.()) {
       const playerObj = _controls.getObject();
       const currentHeight = typeof playerHeight === 'function' ? playerHeight() : playerHeight;
@@ -215,7 +224,7 @@ export function initPointerLock(opts) {
       playerObj.translateX(velocity.x * dt);
       playerObj.translateZ(velocity.z * dt);
       const targetPos = playerObj.position.clone();
-      
+
       // Reset position to apply world-axis aligned movements separately
       playerObj.position.copy(startPos);
 
@@ -248,7 +257,7 @@ export function initPointerLock(opts) {
         const canSnap =
           velocity.y <= 0 && playerObj.position.y <= targetEyeY + PLAYER_SUPPORT_SNAP_UP;
         if (canSnap) {
-          playerObj.position.y = targetEyeY;
+          playerObj.position.y = targetEyeY + Math.sin(bobTimer) * 0.08;
           velocity.y = 0;
           canJump = true;
         } else {
