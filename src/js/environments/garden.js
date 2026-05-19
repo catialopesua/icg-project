@@ -374,28 +374,7 @@ export function createGardenZone(scene, cx, cz){
       scene.add(right);
     }
   }, undefined, (err) => {
-    console.warn('Failed to load bench.glb, falling back to simple benches', err);
-    // fallback: simple procedural benches
-    function makeBench(){
-      const g = new THREE.Group();
-      const seat = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 0.36), new THREE.MeshStandardMaterial({color:0x5a3a24}));
-      seat.position.set(0, 0.25, 0);
-      const back = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 0.08), new THREE.MeshStandardMaterial({color:0x4a2f1a}));
-      back.position.set(0, 0.55, -0.14);
-      const legGeo = new THREE.BoxGeometry(0.08, 0.34, 0.08);
-      const leg1 = new THREE.Mesh(legGeo, new THREE.MeshStandardMaterial({color:0x3b2a20})); leg1.position.set(-0.5, 0.12, 0.12);
-      const leg2 = leg1.clone(); leg2.position.set(0.5, 0.12, 0.12);
-      const leg3 = leg1.clone(); leg3.position.set(-0.5, 0.12, -0.12);
-      const leg4 = leg1.clone(); leg4.position.set(0.5, 0.12, -0.12);
-      g.add(seat, back, leg1, leg2, leg3, leg4);
-      return g;
-    }
-    for (let i = 0; i < benchCountAlong; i++){
-      const t = (i + 0.5) / benchCountAlong;
-      const zPos = cz - 1 - t * pathLength;
-      const benchL = makeBench(); benchL.position.set(cx - offset, 0, zPos); benchL.rotation.y = Math.PI/2; benchL.scale.setScalar(benchScale); scene.add(benchL);
-      const benchR = makeBench(); benchR.position.set(cx + offset, 0, zPos); benchR.rotation.y = -Math.PI/2; benchR.scale.setScalar(benchScale); scene.add(benchR);
-    }
+    console.error('Failed to load bench.glb', err);
   });
 
   // place streetlights between benches on the path center
@@ -506,29 +485,7 @@ export function createGardenZone(scene, cx, cz){
     registerStreetLightCone(cone);
   }
 
-  function addFallbackConeFromSpot(spot) {
-    const dir = new THREE.Vector3().subVectors(spot.target.position, spot.position).normalize();
-    const coneHeight = Math.max(1.0, spot.position.y - 0.05);
-    const baseRadius = Math.max(0.18, coneHeight * Math.tan(spot.angle) * 0.9);
-    const coneGeo = new THREE.ConeGeometry(baseRadius * 1.2, coneHeight * 1.1, 28, 1, true);
-    const coneMat = new THREE.MeshStandardMaterial({
-      color: 0xffd699,
-      transparent: true,
-      opacity: 0.035,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      emissive: 0xffd699,
-      emissiveIntensity: 0.08
-    });
-    const cone = new THREE.Mesh(coneGeo, coneMat);
-    cone.position.copy(spot.position).add(dir.clone().multiplyScalar(coneHeight / 2));
-    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    cone.quaternion.copy(q);
-    cone.rotateX(Math.PI);
-    cone.renderOrder = 1;
-    scene.add(cone);
-    registerStreetLightCone(cone);
-  }
+
 
   lightLoader.load('./models/Blender/streetlight.glb', (gltf) => {
     const lightModel = gltf.scene;
@@ -577,65 +534,7 @@ export function createGardenZone(scene, cx, cz){
       registerLampEmissiveMeshes(lampR);
     }
   }, undefined, (err) => {
-    console.warn('Failed to load streetlight.glb, falling back to simple poles', err);
-    for (let i = 0; i < lightCount; i++) {
-      const t = (i + 0.5) / benchCountAlong;
-      const zPos = cz - 1 - t * pathLength;
-
-      const poleL = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.2), new THREE.MeshStandardMaterial({ color: 0x333333 }));
-      poleL.position.set(cx - 3, 1.1, zPos);
-      poleL.castShadow = true;
-      scene.add(poleL);
-
-      const bulbL = new THREE.Mesh(
-        new THREE.SphereGeometry(0.08, 8, 6),
-        new THREE.MeshStandardMaterial({ emissive: 0xffd699, emissiveIntensity: 1.2, color: 0xffffee })
-      );
-      bulbL.position.set(cx - 3, 2.2, zPos);
-      scene.add(bulbL);
-
-      const poleR = poleL.clone();
-      poleR.position.set(cx + 3, 1.1, zPos);
-      scene.add(poleR);
-
-      const bulbR = bulbL.clone();
-      bulbR.position.set(cx + 3, 2.2, zPos);
-      scene.add(bulbR);
-
-      const spotL = new THREE.SpotLight(0xffd699, 1.8, 10, Math.PI / 5, 0.4, 2);
-      spotL.position.copy(bulbL.position).add(new THREE.Vector3(0, -0.05, 0));
-      spotL.target.position.set(bulbL.position.x, 0.05, bulbL.position.z);
-      spotL.castShadow = false;
-      scene.add(spotL.target);
-      scene.add(spotL);
-      registerStreetLight(spotL);
-      addFallbackConeFromSpot(spotL);
-
-      const spotR = new THREE.SpotLight(0xffd699, 1.8, 10, Math.PI / 5, 0.4, 2);
-      spotR.position.copy(bulbR.position).add(new THREE.Vector3(0, -0.05, 0));
-      spotR.target.position.set(bulbR.position.x, 0.05, bulbR.position.z);
-      spotR.castShadow = false;
-      scene.add(spotR.target);
-      scene.add(spotR);
-      registerStreetLight(spotR);
-      addFallbackConeFromSpot(spotR);
-
-      try {
-        scene.userData.streetLightMeshes = scene.userData.streetLightMeshes || [];
-        bulbL.userData = bulbL.userData || {};
-        bulbL.userData._origEmissiveIntensity = (bulbL.material && bulbL.material.emissiveIntensity !== undefined) ? bulbL.material.emissiveIntensity : 1;
-        scene.userData.streetLightMeshes.push(bulbL);
-        bulbR.userData = bulbR.userData || {};
-        bulbR.userData._origEmissiveIntensity = (bulbR.material && bulbR.material.emissiveIntensity !== undefined) ? bulbR.material.emissiveIntensity : 1;
-        scene.userData.streetLightMeshes.push(bulbR);
-        if (scene.userData.isDay) {
-          if (bulbL.material && bulbL.material.emissive !== undefined) bulbL.material.emissiveIntensity = 0;
-          if (bulbR.material && bulbR.material.emissive !== undefined) bulbR.material.emissiveIntensity = 0;
-        }
-      } catch (e) {
-        console.warn('Failed to register fallback garden bulbs', e);
-      }
-    }
+    console.error('Failed to load streetlight.glb', err);
   });
   // Replace previous arch with a simpler, torii-style entry and put the text on the top beam
   (function addTorii(){

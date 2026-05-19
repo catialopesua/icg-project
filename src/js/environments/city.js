@@ -539,104 +539,7 @@ export function createCityZone(scene, cx, cz) {
     }
   }
 
-  function addFallbackStreetlight(x, z, roadTargetX, roadTargetZ) {
-    const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.03, 0.03, 2.35, 12),
-      new THREE.MeshStandardMaterial({ color: 0x2f2f2f, roughness: 0.85 })
-    );
-    pole.position.set(x, 1.15, z);
-    pole.userData = pole.userData || {};
-    pole.userData.noCollision = true;
-    pole.castShadow = true;
-    scene.add(pole);
 
-    const bulb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.09, 12, 10),
-      new THREE.MeshStandardMaterial({ color: 0xfff8dd, emissive: 0xffd699, emissiveIntensity: 1.2 })
-    );
-    bulb.position.set(x, 2.26, z);
-    bulb.userData = bulb.userData || {};
-    bulb.userData.noCollision = true;
-    scene.add(bulb);
-
-    // Realistic streetlight with warm color and proper decay
-    // 0xffd699: soft amber/warm yellow
-    // Intensity: 1.8 for fallback lights (smaller sources)
-    // Range: 10 for moderate coverage
-    // Angle: Math.PI / 5 for 36-degree cone
-    // Penumbra: 0.4 for soft edges
-    // Decay: 2 for realistic inverse-square falloff
-    const spot = new THREE.SpotLight(0xffd699, 1.8, 10, Math.PI / 5, 0.4, 2);
-    spot.position.set(x, 2.15, z);
-    spot.target.position.set(roadTargetX, 0.05, roadTargetZ);
-
-    // Disable shadow casting to save texture units (directional light handles scene shadows)
-    spot.castShadow = false;
-
-    scene.add(spot.target);
-    scene.add(spot);
-
-    // register fallback spot and bulb for day/night toggling
-    try {
-      spot.userData = spot.userData || {};
-      spot.userData._origIntensity = spot.intensity;
-      spot.userData.isStreetLight = true;
-      scene.userData.streetLights = scene.userData.streetLights || [];
-      scene.userData.streetLights.push(spot);
-      // register bulb mesh for visual toggling
-      scene.userData.streetLightMeshes = scene.userData.streetLightMeshes || [];
-      bulb.userData = bulb.userData || {};
-      bulb.userData._origEmissiveIntensity = (bulb.material && bulb.material.emissiveIntensity !== undefined) ? bulb.material.emissiveIntensity : 1;
-      bulb.userData._origOpacity = (bulb.material && typeof bulb.material.opacity === 'number') ? bulb.material.opacity : 1;
-      scene.userData.streetLightMeshes.push(bulb);
-      if (scene.userData.isDay) {
-        spot.intensity = 0;
-        try { if (bulb.material && bulb.material.emissive !== undefined) bulb.material.emissiveIntensity = 0; } catch (e) { }
-      }
-    } catch (e) {
-      console.warn('Failed to register fallback streetlight', e);
-    }
-
-    const dir = new THREE.Vector3().subVectors(spot.target.position, spot.position).normalize();
-    const coneHeight = Math.max(1.0, spot.position.y - 0.05);
-    const baseRadius = Math.max(0.18, coneHeight * Math.tan(spot.angle) * 0.9);
-    const coneGeo = new THREE.ConeGeometry(baseRadius * 1.2, coneHeight * 1.1, 28, 1, true);
-    const coneMat = new THREE.MeshStandardMaterial({
-      color: 0xffd699,
-      transparent: true,
-      opacity: 0.035,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      emissive: 0xffd699,
-      emissiveIntensity: 0.08
-    });
-    const cone = new THREE.Mesh(coneGeo, coneMat);
-    cone.position.copy(spot.position).add(dir.clone().multiplyScalar(coneHeight / 2));
-    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    cone.quaternion.copy(q);
-    cone.rotateX(Math.PI);
-    cone.renderOrder = 1;
-    scene.add(cone);
-
-    // mark visual cone as non-collidable for fallback lights
-    cone.userData = cone.userData || {};
-    cone.userData.noCollision = true;
-
-    // register cone for fallback light as well (store original opacity)
-    try {
-      scene.userData.streetLightMeshes = scene.userData.streetLightMeshes || [];
-      try {
-        const mats = Array.isArray(cone.material) ? cone.material : [cone.material];
-        cone.userData = cone.userData || {};
-        cone.userData._origOpacity = (mats[0] && typeof mats[0].opacity === 'number') ? mats[0].opacity : 1;
-        if (scene.userData.isDay) for (const mat of mats) if (mat && typeof mat.opacity === 'number') mat.opacity = 0;
-      } catch (e) { }
-      scene.userData.streetLightMeshes.push(cone);
-      scene.userData.streetLightCones = scene.userData.streetLightCones || [];
-      scene.userData.streetLightCones.push(cone);
-      if (scene.userData.isDay) cone.visible = false;
-    } catch (e) { }
-  }
 
   const beachLightSpots = [];
 
@@ -729,19 +632,7 @@ export function createCityZone(scene, cx, cz) {
     // place city lights exactly as specified in `lightPlacements`
     placeCityLightsDirect(baseLightModel);
   }, undefined, (err) => {
-    console.warn('Failed to load streetlight.glb in city zone, using fallback lights', err);
-    for (const s of beachLightSpots) {
-      addFallbackStreetlight(s.x, s.z, s.x, s.z);
-    }
-    // fallback: place city lights exactly as specified using fallback lights
-    for (const p of lightPlacements) {
-      const rotVal = (typeof p.dir === 'string') ? dirToRot(p.dir) : (typeof p.dir === 'number' ? p.dir : 0);
-      addFallbackStreetlight(p.x, p.z, p.x, p.z);
-      placedCityLights.push({ x: p.x, z: p.z, dir: p.dir || rotVal });
-    }
-    if (typeof binModelGlobal !== 'undefined' && binModelGlobal) {
-      placeBinsForCityLights(binModelGlobal);
-    }
+    console.error('Failed to load streetlight.glb in city zone', err);
   });
 
   // Small trash bins placed near streetlights on sidewalks
@@ -847,30 +738,7 @@ export function createCityZone(scene, cx, cz) {
     // try placing bins for city lights once those are in place
     tryPlaceBinsForCityLightsWhenReady();
   }, undefined, (err) => {
-    console.warn('Failed to load trashbin.glb, using simple fallback bins', err);
-    for (const s of beachLightSpots) {
-      const rotVal = s.dir ? dirToRot(s.dir) : (s.rot || 0);
-      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotVal, 0));
-      const rightVec = new THREE.Vector3(1, 0, 0).applyQuaternion(q).normalize();
-      let candX = s.x + rightVec.x * 0.9;
-      let candZ = s.z + rightVec.z * 0.9;
-      if (pointIsOnRoad(candX, candZ)) {
-        const snap = { x: candX, z: candZ };
-        snapToSidewalk(snap);
-        candX = snap.x; candZ = snap.z;
-      }
-      const bmesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.14, 0.14, 0.46, 12),
-        new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 })
-      );
-      bmesh.position.set(candX, 0.23, candZ);
-      bmesh.castShadow = true;
-      bmesh.userData = bmesh.userData || {};
-      bmesh.userData.noCollision = true;
-      scene.add(bmesh);
-    }
-    // also attempt to place fallback bins for city lights later
-    tryPlaceBinsForCityLightsWhenReady();
+    console.error('Failed to load trashbin.glb', err);
   });
 
   loader.load('./models/Blender/City/building1.glb', (gltf1) => {

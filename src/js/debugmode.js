@@ -330,40 +330,7 @@ function setRelativePartyPosition(object, placement, localX, localY, localZ) {
   );
 }
 
-function createFallbackCakePreview() {
-  const cake = new THREE.Group();
-  cake.name = 'debug-fallback-cake';
-  cake.userData.baseScale = 1;
 
-  const cakeMat = new THREE.MeshStandardMaterial({ color: 0xffb8d8, roughness: 0.7, metalness: 0.02 });
-  const icingMat = new THREE.MeshStandardMaterial({ color: 0xfff4fb, roughness: 0.62, metalness: 0.01 });
-  const candleMat = new THREE.MeshStandardMaterial({ color: 0x5bc7ff, roughness: 0.5, metalness: 0.02 });
-  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffc94f });
-
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.22, 40), cakeMat);
-  base.position.y = 0.11;
-  const icing = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.055, 40), icingMat);
-  icing.position.y = 0.245;
-  cake.add(base, icing);
-
-  for (let i = 0; i < 5; i++) {
-    const angle = (i / 5) * Math.PI * 2;
-    const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.19, 10), candleMat);
-    candle.position.set(Math.sin(angle) * 0.2, 0.36, Math.cos(angle) * 0.2);
-    const flame = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), flameMat);
-    flame.position.set(candle.position.x, 0.49, candle.position.z);
-    flame.scale.y = 1.45;
-    cake.add(candle, flame);
-  }
-
-  cake.traverse((node) => {
-    if (!node.isMesh) return;
-    node.castShadow = true;
-    node.receiveShadow = true;
-  });
-
-  return cake;
-}
 
 function attachPartyCakePreview() {
   if (!partyPreviewGroup || !partyCakePreview) return;
@@ -384,9 +351,8 @@ function loadPartyCakePreview() {
     placeModelOnGround(partyCakePreview, box);
     smoothModelShading(partyCakePreview);
     attachPartyCakePreview();
-  }, undefined, () => {
-    partyCakePreview = createFallbackCakePreview();
-    attachPartyCakePreview();
+  }, undefined, (err) => {
+    console.error('Failed to load cake.glb in debugmode', err);
   });
 }
 

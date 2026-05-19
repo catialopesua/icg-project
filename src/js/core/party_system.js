@@ -18,7 +18,7 @@ const partyOffsetVector = new THREE.Vector3();
 let partySceneGroup = null;
 let partyCake = null;
 let partyCakeLoadStarted = false;
-let partyFallbackCake = null;
+
 
 function getPlacementScale(placement) {
   return Math.max(0.2, Number(placement && placement.scale) || 1);
@@ -28,34 +28,11 @@ function getModelBaseScale(model) {
   return Number(model && model.userData && model.userData.baseScale) || Number(model && model.scale && model.scale.x) || 1;
 }
 
-function createPartyFallbackCake() {
-  const cake = new THREE.Group(); cake.name = 'fallback-birthday-cake';
-  const cakeMat = new THREE.MeshStandardMaterial({ color: 0xffb8d8, roughness: 0.7, metalness: 0.02 });
-  const icingMat = new THREE.MeshStandardMaterial({ color: 0xfff4fb, roughness: 0.62, metalness: 0.01 });
-  const candleMat = new THREE.MeshStandardMaterial({ color: 0x5bc7ff, roughness: 0.5, metalness: 0.02 });
-  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffc94f });
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.22, 40), cakeMat); base.position.y = 0.11;
-  const icing = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.055, 40), icingMat); icing.position.y = 0.245;
-  cake.add(base, icing);
-  for (let i = 0; i < 5; i++) {
-    const angle = (i / 5) * Math.PI * 2;
-    const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.19, 10), candleMat);
-    candle.position.set(Math.sin(angle) * 0.2, 0.36, Math.cos(angle) * 0.2);
-    const flame = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), flameMat);
-    flame.position.set(candle.position.x, 0.49, candle.position.z); flame.scale.y = 1.45;
-    cake.add(candle, flame);
-  }
-  cake.traverse((node) => {
-    node.userData.noAutoCollision = true;
-    if (node.isMesh) { node.castShadow = true; node.receiveShadow = true; }
-  });
-  cake.userData.baseScale = 1;
-  return cake;
-}
+
 
 function attachPartyCake(layout) {
   if (!partySceneGroup) return;
-  const cake = partyCake || partyFallbackCake;
+  const cake = partyCake;
   if (!cake) return;
   const tablePlacement = getPartyPlacement(layout, 'table');
   if (!tablePlacement) return;
@@ -82,9 +59,7 @@ export function loadPartyCakeAsset(layout) {
     partyCake.userData.baseScale = partyCake.scale.x;
     attachPartyCake(layout);
   }, undefined, (err) => {
-    console.warn('Failed to load cake.glb, using fallback cake', err);
-    partyFallbackCake = createPartyFallbackCake();
-    attachPartyCake(layout);
+    console.error('Failed to load cake.glb', err);
   });
 }
 
