@@ -22,7 +22,7 @@ import { PARK_CENTER_X, PARK_CENTER_Z, loadPartyLayout } from './party.js';
 import { preparePartyScene, updatePartyProps, loadPartyCakeAsset } from './core/party_system.js';
 
 // ── KeyboardEvent WebKit / iOS Safari Polyfill ─────────────────────────────
-(function() {
+(function () {
   if (typeof window !== 'undefined' && 'KeyboardEvent' in window) {
     const OriginalKeyboardEvent = window.KeyboardEvent;
     try {
@@ -35,7 +35,7 @@ import { preparePartyScene, updatePartyProps, loadPartyCakeAsset } from './core/
           'KeyD': 68, 'ArrowRight': 39,
           'Space': 32, 'KeyE': 69
         };
-        window.KeyboardEvent = function(type, dict) {
+        window.KeyboardEvent = function (type, dict) {
           const event = new OriginalKeyboardEvent(type, dict);
           if (dict && dict.code) {
             Object.defineProperty(event, 'code', { value: dict.code, enumerable: true });
@@ -48,7 +48,7 @@ import { preparePartyScene, updatePartyProps, loadPartyCakeAsset } from './core/
         };
         window.KeyboardEvent.prototype = OriginalKeyboardEvent.prototype;
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 })();
 
@@ -90,6 +90,20 @@ createCityZone(scene, 22, -4);
 const beachZone = createBeachZone(scene, 0, 12);
 
 // ---------------------------------------------------------------------------
+// Intro Camera — top-down view over the city, animates until player joins
+// ---------------------------------------------------------------------------
+/** City zone centre used for the intro flyover. */
+const INTRO_CITY_X = -3;
+const INTRO_CITY_Z = -7;
+const INTRO_CAM_Y = 40;   // height above ground
+const INTRO_PAN_RADIUS = 10; // gentle orbit radius
+
+// Position camera immediately so the very first rendered frame looks right.
+camera.position.set(INTRO_CITY_X, INTRO_CAM_Y, INTRO_CITY_Z);
+camera.rotation.set(-Math.PI / 2, 0, 0); // look straight down
+
+
+// ---------------------------------------------------------------------------
 // Core Systems
 // ---------------------------------------------------------------------------
 initAudioListener(camera);
@@ -117,7 +131,7 @@ const triggerFirstJoin = () => {
     controls.getObject().rotation.x = 0;
     controls.getObject().rotation.z = 0;
     hasJoinedOnce = true;
-    
+
     const blockerEl = document.getElementById('blocker');
     if (blockerEl) blockerEl.classList.add('hidden');
     document.body.classList.remove('pregame');
@@ -144,7 +158,7 @@ const { controls, updateMovement } = initPointerLock({
   isInputBlocked: () => false,
   onFirstJoin: triggerFirstJoin,
   onLockAcquired: hidePauseOverlay,
-  onLockReleased: () => {},
+  onLockReleased: () => { },
   playButton: document.getElementById('play-button'),
   instructions: document.getElementById('blocker'), // Use blocker instead of non-existent instructions ID
   pauseOverlay: document.getElementById('pause-overlay'),
@@ -321,7 +335,20 @@ addAnimationHook((dt, elapsed) => {
   if (beachZone?.update) beachZone.update(elapsed, dt);
   checkInteraction(camera, scene);
   updateInteractHint(false, false, () => (!timDialogueCompleted || (unlockedFriendIds.size >= FRIEND_DEFS.length && !partyCutsceneStarted)), unlockedFriendIds);
+
+  // Intro camera: slow pan over the city until the player joins.
+  if (!hasJoinedOnce) {
+    const angle = elapsed * 0.08; // ~72s per full orbit — extremely slow
+    camera.position.set(
+      INTRO_CITY_X + Math.sin(angle) * INTRO_PAN_RADIUS,
+      INTRO_CAM_Y,
+      INTRO_CITY_Z + Math.cos(angle) * INTRO_PAN_RADIUS
+    );
+    // Always look straight down regardless of orbit position
+    camera.rotation.set(-Math.PI / 2, 0, 0);
+  }
 });
+
 
 setupAudioSettings(document.getElementById('setting-music-volume'), document.getElementById('music-volume-value'), document.getElementById('setting-sfx-volume'), document.getElementById('sfx-volume-value'));
 setupSensitivitySettings(document.getElementById('setting-sensitivity'), document.getElementById('sensitivity-value'), () => controls);
@@ -374,6 +401,7 @@ THREE.DefaultLoadingManager.onLoad = () => {
   setTimeout(() => {
     document.getElementById('loading-screen').classList.add('hidden');
     document.getElementById('intro-screen').classList.remove('hidden');
+    document.getElementById('blocker').classList.add('intro-active');
   }, 150);
 };
 

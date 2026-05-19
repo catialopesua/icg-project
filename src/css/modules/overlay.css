@@ -6,8 +6,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff;
-  /* Solid white background */
+  background: #ffffff; /* Solid white background during loading */
+  transition: background 0.8s ease;
+}
+
+#blocker.intro-active {
+  /* Semi-transparent white so the 3D city scene shows through */
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
 }
 
 #blocker.hidden {
