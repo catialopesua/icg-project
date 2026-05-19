@@ -7,38 +7,28 @@ import { createBeachZone } from './environments/beach.js';
 import {
   DEFAULT_FOREST_LAYOUT,
   FOREST_ITEM_TYPES,
-  clearForestLayout,
   createForestZone,
   layoutToCode,
-  loadForestLayout,
-  saveForestLayout
+  loadForestLayout
 } from './environments/forest.js';
 import {
   FRIEND_DEFS,
-  clearFriendPlacements,
-  clearPlayerStart,
-  clearTimPlacement,
   getDefaultFriendPlacements,
   getDefaultPlayerStart,
   getDefaultTimPlacement,
   loadFriendPlacements,
   loadPlayerStart,
-  loadTimPlacement,
-  saveFriendPlacements,
-  savePlayerStart,
-  saveTimPlacement
+  loadTimPlacement
 } from './friends.js';
 import {
   PARK_CENTER_X,
   PARK_CENTER_Z,
   PARTY_BALLOON_IDS,
   PARTY_ELEMENT_DEFS,
-  clearPartyLayout,
   getDefaultPartyLayout,
   getPartyElementDef,
   loadPartyLayout,
-  partyLayoutToCode,
-  savePartyLayout
+  partyLayoutToCode
 } from './party.js';
 
 const PAINT_SPACING = {
@@ -88,11 +78,9 @@ const PARTY_COLORS = {
 const container = document.getElementById('canvas-container');
 const statusEl = document.getElementById('debug-status');
 const outputEl = document.getElementById('layout-output');
-const saveButton = document.getElementById('save-layout');
 const copyButton = document.getElementById('copy-layout');
 const deleteSelectedButton = document.getElementById('delete-selected');
 const resetButton = document.getElementById('reset-layout');
-const clearSavedButton = document.getElementById('clear-saved');
 const rotationStepInput = document.getElementById('rotation-step');
 const rotationStepValue = document.getElementById('rotation-step-value');
 const editForestButton = document.getElementById('edit-forest');
@@ -102,7 +90,6 @@ const editSpawnButton = document.getElementById('edit-spawn');
 const editPartyButton = document.getElementById('edit-party');
 const paintModeButton = document.getElementById('paint-mode');
 const selectModeButton = document.getElementById('select-mode');
-const autosaveToggle = document.getElementById('autosave-toggle');
 const paintPaletteElement = document.getElementById('paint-palette');
 const friendPaletteElement = document.getElementById('friend-palette');
 const partyPaletteElement = document.getElementById('party-palette');
@@ -629,24 +616,7 @@ function worldPlacementToCode(name, placement) {
   return `const ${name} = ${JSON.stringify(placement || {}, null, 2)};`;
 }
 
-function persistIfAutosave() {
-  if (!autosaveToggle.checked) return;
-  if (editTarget === 'friends') {
-    friendLayout = saveFriendPlacements(friendLayout);
-    applyFriendPlacementsToModels();
-  } else if (editTarget === 'tim') {
-    timPlacement = saveTimPlacement(timPlacement);
-    applyTimPlacementToModel();
-  } else if (editTarget === 'spawn') {
-    playerStart = savePlayerStart(playerStart);
-  } else if (editTarget === 'party') {
-    partyLayout = savePartyLayout(partyLayout);
-    updatePartyPreview();
-    applyPartyPreviewToModels();
-  } else {
-    layout = saveForestLayout(layout);
-  }
-}
+
 
 function setStatus(message) {
   statusEl.textContent = message;
@@ -932,7 +902,6 @@ function refreshMarkers() {
 }
 
 function syncForest(statusOverride = '') {
-  persistIfAutosave();
   forestController.setLayout(layout);
   updateOutput();
   refreshMarkers();
@@ -953,7 +922,6 @@ function syncForest(statusOverride = '') {
 }
 
 function syncFriends(statusOverride = '') {
-  persistIfAutosave();
   applyFriendPlacementsToModels();
   updateOutput();
   refreshMarkers();
@@ -981,7 +949,6 @@ function syncFriends(statusOverride = '') {
 }
 
 function syncTim(statusOverride = '') {
-  persistIfAutosave();
   applyTimPlacementToModel();
   updateOutput();
   refreshMarkers();
@@ -996,7 +963,6 @@ function syncTim(statusOverride = '') {
 }
 
 function syncSpawn(statusOverride = '') {
-  persistIfAutosave();
   updateOutput();
   refreshMarkers();
   syncPlacementInputs();
@@ -1010,7 +976,6 @@ function syncSpawn(statusOverride = '') {
 }
 
 function syncParty(statusOverride = '') {
-  persistIfAutosave();
   updatePartyPreview();
   applyPartyPreviewToModels();
   updateOutput();
@@ -1532,71 +1497,6 @@ partyPaletteButtons.forEach((button) => {
   input.addEventListener('input', applyPlacementInputValues);
 });
 
-autosaveToggle.addEventListener('change', () => {
-  if (autosaveToggle.checked) {
-    if (editTarget === 'friends') {
-      friendLayout = saveFriendPlacements(friendLayout);
-      applyFriendPlacementsToModels();
-      setStatus('Auto-save is on. Friend placements will update the map live.');
-    } else if (editTarget === 'tim') {
-      timPlacement = saveTimPlacement(timPlacement);
-      applyTimPlacementToModel();
-      setStatus('Auto-save is on. Tim placement will update the map live.');
-    } else if (editTarget === 'spawn') {
-      playerStart = savePlayerStart(playerStart);
-      setStatus('Auto-save is on. First spawn will update the map live.');
-    } else if (editTarget === 'party') {
-      partyLayout = savePartyLayout(partyLayout);
-      updatePartyPreview();
-      applyPartyPreviewToModels();
-      setStatus('Auto-save is on. Party placements will update the map live.');
-    } else {
-      layout = saveForestLayout(layout);
-      setStatus('Auto-save is on. New edits will update the map live.');
-    }
-  } else {
-    setStatus('Auto-save is off. Use Save To Map when you want to push changes.');
-  }
-});
-
-saveButton.addEventListener('click', () => {
-  if (editTarget === 'friends') {
-    friendLayout = saveFriendPlacements(friendLayout);
-    applyFriendPlacementsToModels();
-    updateOutput();
-    setStatus('Saved friend placements to the map.');
-    return;
-  }
-
-  if (editTarget === 'tim') {
-    timPlacement = saveTimPlacement(timPlacement);
-    applyTimPlacementToModel();
-    updateOutput();
-    setStatus('Saved Tim placement to the map.');
-    return;
-  }
-
-  if (editTarget === 'spawn') {
-    playerStart = savePlayerStart(playerStart);
-    updateOutput();
-    setStatus('Saved first spawn to the map.');
-    return;
-  }
-
-  if (editTarget === 'party') {
-    partyLayout = savePartyLayout(partyLayout);
-    updatePartyPreview();
-    applyPartyPreviewToModels();
-    updateOutput();
-    setStatus('Saved party layout to the map.');
-    return;
-  }
-
-  layout = saveForestLayout(layout);
-  forestController.setLayout(layout);
-  updateOutput();
-  setStatus('Saved to the map. You can keep placing items right away.');
-});
 
 copyButton.addEventListener('click', async () => {
   const text = editTarget === 'friends'
@@ -1698,43 +1598,6 @@ resetButton.addEventListener('click', () => {
   layout = cloneDefaultLayout();
   selectedIndex = -1;
   syncEditor('Reset to the default forest layout.');
-});
-
-clearSavedButton.addEventListener('click', () => {
-  if (editTarget === 'friends') {
-    clearFriendPlacements();
-    friendLayout = getDefaultFriendPlacements();
-    selectedFriendIndex = -1;
-    applyFriendPlacementsToModels();
-    syncEditor('Saved override cleared. Friend placements are back to defaults.');
-    return;
-  }
-
-  if (editTarget === 'tim') {
-    clearTimPlacement();
-    timPlacement = getDefaultTimPlacement();
-    applyTimPlacementToModel();
-    syncEditor('Saved override cleared. Tim is back to default placement.');
-    return;
-  }
-
-  if (editTarget === 'spawn') {
-    clearPlayerStart();
-    playerStart = getDefaultPlayerStart();
-    syncEditor('Saved override cleared. First spawn is back to default.');
-    return;
-  }
-
-  if (editTarget === 'party') {
-    clearPartyLayout();
-    partyLayout = getDefaultPartyLayout();
-    selectedPartyIndex = -1;
-    syncEditor('Saved override cleared. Party layout is back to default.');
-    return;
-  }
-
-  clearForestLayout();
-  setStatus('Saved override cleared. The live map will now fall back to the code layout.');
 });
 
 window.addEventListener('resize', () => {

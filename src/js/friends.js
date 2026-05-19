@@ -175,42 +175,15 @@ export function normalizeFriendPlacements(rawPlacements) {
 }
 
 export function loadFriendPlacements() {
-  const storage = getStorage();
-  if (!storage) return getDefaultFriendPlacements();
-
-  try {
-    const raw = storage.getItem(FRIEND_PLACEMENTS_STORAGE_KEY);
-    if (!raw) return getDefaultFriendPlacements();
-    const parsed = JSON.parse(raw);
-    return normalizeFriendPlacements(parsed);
-  } catch (e) {
-    return getDefaultFriendPlacements();
-  }
+  return getDefaultFriendPlacements();
 }
 
 export function saveFriendPlacements(placements) {
-  const storage = getStorage();
-  const normalized = normalizeFriendPlacements(placements);
-
-  if (storage) {
-    try {
-      storage.setItem(FRIEND_PLACEMENTS_STORAGE_KEY, JSON.stringify(normalized));
-    } catch (e) {
-      // ignore persistence failures
-    }
-  }
-
-  return normalized;
+  return normalizeFriendPlacements(placements);
 }
 
 export function clearFriendPlacements() {
-  const storage = getStorage();
-  if (!storage) return;
-  try {
-    storage.removeItem(FRIEND_PLACEMENTS_STORAGE_KEY);
-  } catch (e) {
-    // ignore
-  }
+  // no-op
 }
 
 export function getDefaultTimPlacement() {
@@ -222,41 +195,15 @@ export function normalizeTimPlacement(placement) {
 }
 
 export function loadTimPlacement() {
-  const storage = getStorage();
-  if (!storage) return getDefaultTimPlacement();
-
-  try {
-    const raw = storage.getItem(TIM_PLACEMENT_STORAGE_KEY);
-    if (!raw) return getDefaultTimPlacement();
-    return normalizeTimPlacement(JSON.parse(raw));
-  } catch (e) {
-    return getDefaultTimPlacement();
-  }
+  return getDefaultTimPlacement();
 }
 
 export function saveTimPlacement(placement) {
-  const storage = getStorage();
-  const normalized = normalizeTimPlacement(placement);
-
-  if (storage) {
-    try {
-      storage.setItem(TIM_PLACEMENT_STORAGE_KEY, JSON.stringify(normalized));
-    } catch (e) {
-      // ignore persistence failures
-    }
-  }
-
-  return normalized;
+  return normalizeTimPlacement(placement);
 }
 
 export function clearTimPlacement() {
-  const storage = getStorage();
-  if (!storage) return;
-  try {
-    storage.removeItem(TIM_PLACEMENT_STORAGE_KEY);
-  } catch (e) {
-    // ignore
-  }
+  // no-op
 }
 
 export function getDefaultPlayerStart() {
@@ -268,41 +215,15 @@ export function normalizePlayerStart(placement) {
 }
 
 export function loadPlayerStart() {
-  const storage = getStorage();
-  if (!storage) return getDefaultPlayerStart();
-
-  try {
-    const raw = storage.getItem(PLAYER_START_STORAGE_KEY);
-    if (!raw) return getDefaultPlayerStart();
-    return normalizePlayerStart(JSON.parse(raw));
-  } catch (e) {
-    return getDefaultPlayerStart();
-  }
+  return getDefaultPlayerStart();
 }
 
 export function savePlayerStart(placement) {
-  const storage = getStorage();
-  const normalized = normalizePlayerStart(placement);
-
-  if (storage) {
-    try {
-      storage.setItem(PLAYER_START_STORAGE_KEY, JSON.stringify(normalized));
-    } catch (e) {
-      // ignore persistence failures
-    }
-  }
-
-  return normalized;
+  return normalizePlayerStart(placement);
 }
 
 export function clearPlayerStart() {
-  const storage = getStorage();
-  if (!storage) return;
-  try {
-    storage.removeItem(PLAYER_START_STORAGE_KEY);
-  } catch (e) {
-    // ignore
-  }
+  // no-op
 }
 
 export function loadFriendUnlocks() {

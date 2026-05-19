@@ -299,22 +299,6 @@ function loadLegacyTreeLayout(storage) {
 }
 
 export function loadForestLayout() {
-  const storage = getStorage();
-  if (!storage) return cloneLayout(DEFAULT_FOREST_LAYOUT);
-
-  try {
-    const raw = storage.getItem(FOREST_LAYOUT_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      const normalized = normalizeForestLayout(parsed);
-      if (normalized.length) return normalized;
-    }
-  } catch (e) {
-    // fall through to legacy/default
-  }
-
-  const legacy = loadLegacyTreeLayout(storage);
-  if (legacy && legacy.length) return legacy;
   return cloneLayout(DEFAULT_FOREST_LAYOUT);
 }
 
@@ -322,30 +306,8 @@ export function loadForestTreeLayout() {
   return normalizeForestTreeLayout(loadForestLayout());
 }
 
-function broadcastLayout(layout) {
-  const channel = getBroadcastChannel();
-  if (!channel) return;
-  try {
-    channel.postMessage({ type: 'forest-layout-saved', layout });
-    channel.close();
-  } catch (e) {
-    console.warn('Failed to broadcast forest layout', e);
-  }
-}
-
 export function saveForestLayout(layout) {
-  const storage = getStorage();
-  const normalized = normalizeForestLayout(layout);
-  if (!storage) return normalized;
-
-  try {
-    storage.setItem(FOREST_LAYOUT_STORAGE_KEY, JSON.stringify(normalized));
-  } catch (e) {
-    console.warn('Failed to save forest layout', e);
-  }
-
-  broadcastLayout(normalized);
-  return normalized;
+  return normalizeForestLayout(layout);
 }
 
 export function saveForestTreeLayout(layout) {
@@ -354,14 +316,7 @@ export function saveForestTreeLayout(layout) {
 }
 
 export function clearForestLayout() {
-  const storage = getStorage();
-  if (!storage) return;
-  try {
-    storage.removeItem(FOREST_LAYOUT_STORAGE_KEY);
-    storage.removeItem(FOREST_TREE_LEGACY_STORAGE_KEY);
-  } catch (e) {
-    console.warn('Failed to clear forest layout', e);
-  }
+  // no-op
 }
 
 export function clearForestTreeLayout() {

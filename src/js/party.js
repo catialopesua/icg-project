@@ -216,41 +216,15 @@ export function normalizePartyLayout(rawLayout) {
 }
 
 export function loadPartyLayout() {
-  const storage = getStorage();
-  if (!storage) return getDefaultPartyLayout();
-
-  try {
-    const raw = storage.getItem(PARTY_LAYOUT_STORAGE_KEY);
-    if (!raw) return getDefaultPartyLayout();
-    return normalizePartyLayout(JSON.parse(raw));
-  } catch (e) {
-    return getDefaultPartyLayout();
-  }
+  return getDefaultPartyLayout();
 }
 
 export function savePartyLayout(layout) {
-  const storage = getStorage();
-  const normalized = normalizePartyLayout(layout);
-
-  if (storage) {
-    try {
-      storage.setItem(PARTY_LAYOUT_STORAGE_KEY, JSON.stringify(normalized));
-    } catch (e) {
-      // ignore persistence failures
-    }
-  }
-
-  return normalized;
+  return normalizePartyLayout(layout);
 }
 
 export function clearPartyLayout() {
-  const storage = getStorage();
-  if (!storage) return;
-  try {
-    storage.removeItem(PARTY_LAYOUT_STORAGE_KEY);
-  } catch (e) {
-    // ignore
-  }
+  // no-op
 }
 
 export function getPartyElementDef(id) {
