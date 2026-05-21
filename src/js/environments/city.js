@@ -824,6 +824,7 @@ export function createCityZone(scene, cx, cz) {
           new THREE.MeshBasicMaterial({ color: 0xff3333 })
         );
         topSphere.position.set(targetPos.x, targetPos.y + 0.22, targetPos.z);
+        topSphere.visible = false;
         topSphere.userData = topSphere.userData || {};
         topSphere.userData.noCollision = true;
         debugGroup.add(topSphere);
