@@ -411,7 +411,7 @@ export function createCityZone(scene, cx, cz) {
     // Angle: Math.PI / 4 for 45-degree cone (narrower for focused light)
     // Penumbra: 0.3 for soft edges instead of 0.22
     // Decay: 2 for realistic inverse-square falloff
-    const spot = new THREE.SpotLight(0xffd699, 2.5, 20, Math.PI / 2.5, 0.9, 2);
+    const spot = new THREE.SpotLight(0xffd699, 80.0, 20, Math.PI / 2.5, 0.9, 2);
 
     // Position light slightly below lamp head for realistic downward lighting
     spot.position.set(x, topY - 0.5, z + spotZOffset);

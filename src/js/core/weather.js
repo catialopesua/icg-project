@@ -381,23 +381,23 @@ export function applyDayNight(day) {
   scene.environment = day ? daySkyTexture : nightSkyTexture;
 
   if (day) {
-    dir.color.set(0xfff1d6); dir.intensity = 0.78; dir.position.copy(DAY_LIGHT_POS);
+    dir.color.set(0xfff1d6); dir.intensity = 2.45; dir.position.copy(DAY_LIGHT_POS);
     dir.shadow.mapSize.set(4096, 4096); dir.shadow.bias = -0.00022; dir.shadow.normalBias = 0.014;
     dir.shadow.radius = 12; dir.shadow.blurSamples = 16; dir.shadow.camera.near = 0.5; dir.shadow.camera.far = 110;
     dir.shadow.camera.left = -DAY_SHADOW_BOUNDS; dir.shadow.camera.right = DAY_SHADOW_BOUNDS;
     dir.shadow.camera.top = DAY_SHADOW_BOUNDS; dir.shadow.camera.bottom = -DAY_SHADOW_BOUNDS;
     sun.visible = true; moon.visible = false; sun.position.copy(dir.position);
-    hemi.color.set(0xffffff); hemi.groundColor.set(0xcfd6e6); hemi.intensity = 0.26;
-    setAmbientIntensity(0.24);
+    hemi.color.set(0xffffff); hemi.groundColor.set(0xcfd6e6); hemi.intensity = 0.8;
+    setAmbientIntensity(0.75);
   } else {
-    dir.color.set(0x90a9e6); dir.intensity = 0.26; dir.position.copy(NIGHT_LIGHT_POS);
+    dir.color.set(0x90a9e6); dir.intensity = 0.8; dir.position.copy(NIGHT_LIGHT_POS);
     dir.shadow.mapSize.set(4096, 4096); dir.shadow.bias = -0.001; dir.shadow.normalBias = 0.03;
     dir.shadow.radius = 4; dir.shadow.blurSamples = 8; dir.shadow.camera.near = 0.5; dir.shadow.camera.far = 140;
     dir.shadow.camera.left = -NIGHT_SHADOW_BOUNDS; dir.shadow.camera.right = NIGHT_SHADOW_BOUNDS;
     dir.shadow.camera.top = NIGHT_SHADOW_BOUNDS; dir.shadow.camera.bottom = -NIGHT_SHADOW_BOUNDS;
     sun.visible = false; moon.visible = true;
-    hemi.color.set(0x0a1b2e); hemi.groundColor.set(0x02040a); hemi.intensity = 0.05;
-    setAmbientIntensity(0.035);
+    hemi.color.set(0x0a1b2e); hemi.groundColor.set(0x02040a); hemi.intensity = 0.16;
+    setAmbientIntensity(0.11);
   }
   dir.target.position.copy(SHADOW_TARGET_POS); dir.target.updateMatrixWorld(true);
   dir.shadow.camera.updateProjectionMatrix(); dir.shadow.needsUpdate = true;
@@ -418,7 +418,7 @@ export function applyDayNight(day) {
   for (const sl of sLights) {
     if (day) sl.intensity = 0;
     else if (sl.userData && typeof sl.userData._origIntensity === 'number') sl.intensity = sl.userData._origIntensity;
-    else sl.intensity = 2.0;
+    else sl.intensity = 80.0;
     sl.visible = true;
   }
   const sMeshes = (scene.userData && scene.userData.streetLightMeshes) ? scene.userData.streetLightMeshes : [];
@@ -459,7 +459,7 @@ export function applyWeather(name) {
     case 'sunset':
       applyDayNight(true); scene.background = null; scene.environment = sunsetSkyTexture; renderer.setClearColor(0xe78852);
       if (scene.fog) { scene.fog.color.set(0xdd8a62); scene.fog.density = 0.0212; }
-      dir.color.set(0xff9d5c); dir.intensity = 0.7; dir.position.set(-34, 24, 0);
+      dir.color.set(0xff9d5c); dir.intensity = 2.2; dir.position.set(-34, 24, 0);
       dir.shadow.bias = -0.00028; dir.shadow.normalBias = 0.02; dir.shadow.radius = 1.8; dir.shadow.blurSamples = 6;
       dir.shadow.camera.near = 0.5; dir.shadow.camera.far = 120;
       dir.shadow.camera.left = -DAY_SHADOW_BOUNDS; dir.shadow.camera.right = DAY_SHADOW_BOUNDS;
@@ -467,42 +467,42 @@ export function applyWeather(name) {
       dir.target.position.copy(SHADOW_TARGET_POS); dir.target.updateMatrixWorld(true);
       dir.shadow.camera.updateProjectionMatrix(); dir.shadow.needsUpdate = true;
       sun.visible = false; sun.position.copy(dir.position); moon.visible = false;
-      hemi.color.set(0xffb98e); hemi.groundColor.set(0x5a3728); hemi.intensity = 0.7;
-      setAmbientIntensity(0.17); ensureSunsetSkyDome().visible = true;
+      hemi.color.set(0xffb98e); hemi.groundColor.set(0x5a3728); hemi.intensity = 2.2;
+      setAmbientIntensity(0.53); ensureSunsetSkyDome().visible = true;
       break;
     case 'rainy':
       applyDayNight(true); scene.background = null; scene.environment = daySkyTexture; renderer.setClearColor(0x8599aa);
       if (scene.fog) { scene.fog.color.set(0x8ca0af); scene.fog.density = 0.0026; }
       setGradientSky(0x465d73, 0x72889a, 0xb8c7d2); ensureGradientSky().visible = true;
-      dir.color.set(0xdde6ef); dir.intensity = 0.54; sun.visible = false; moon.visible = false;
-      hemi.color.set(0xdce6ee); hemi.groundColor.set(0x5f6a74); hemi.intensity = 0.19;
-      setAmbientIntensity(0.18); ensureRainSystem();
+      dir.color.set(0xdde6ef); dir.intensity = 1.7; sun.visible = false; moon.visible = false;
+      hemi.color.set(0xdce6ee); hemi.groundColor.set(0x5f6a74); hemi.intensity = 0.6;
+      setAmbientIntensity(0.57); ensureRainSystem();
       break;
     case 'northern-lights':
       applyDayNight(false); scene.background = northernLightsSkyTexture; scene.environment = northernLightsSkyTexture;
       renderer.setClearColor(0x051020); if (scene.fog) { scene.fog.color.set(0x061625); scene.fog.density = 0.0032; }
-      dir.color.set(0x95b1f2); dir.intensity = 0.24;
-      hemi.color.set(0x9ed7e5); hemi.groundColor.set(0x07131d); hemi.intensity = 0.08;
-      setAmbientIntensity(0.05); ensureAuroraGroup();
+      dir.color.set(0x95b1f2); dir.intensity = 0.75;
+      hemi.color.set(0x9ed7e5); hemi.groundColor.set(0x07131d); hemi.intensity = 0.25;
+      setAmbientIntensity(0.16); ensureAuroraGroup();
       break;
     case 'rainbow':
       applyDayNight(true); scene.background = null; scene.environment = daySkyTexture; renderer.setClearColor(0x8fdcff);
       if (scene.fog) { scene.fog.color.set(0xe7f5ff); scene.fog.density = 0.00055; }
       setGradientSky(0x79caff, 0xc1efff, 0xfff7fb); ensureGradientSky().visible = true;
-      dir.color.set(0xfff6d8); dir.intensity = 0.7; dir.position.set(40, 42, -28);
+      dir.color.set(0xfff6d8); dir.intensity = 2.2; dir.position.set(40, 42, -28);
       dir.target.position.copy(SHADOW_TARGET_POS); dir.target.updateMatrixWorld(true);
       dir.shadow.camera.updateProjectionMatrix(); dir.shadow.needsUpdate = true;
       sun.visible = true; sun.position.copy(dir.position); moon.visible = false;
-      hemi.color.set(0xf8fbff); hemi.groundColor.set(0xe0d2ef); hemi.intensity = 0.34;
-      setAmbientIntensity(0.3); ensureRainbowGroup().visible = true;
+      hemi.color.set(0xf8fbff); hemi.groundColor.set(0xe0d2ef); hemi.intensity = 1.07;
+      setAmbientIntensity(0.94); ensureRainbowGroup().visible = true;
       break;
     case 'snowy':
       applyDayNight(true); scene.background = null; scene.environment = null; renderer.setClearColor(0xd8e4ef);
       if (scene.fog) { scene.fog.color.set(0xc8d7e6); scene.fog.density = 0.0042; }
       setGradientSky(0xb0bfd0, 0xd4e0ea, 0xf5f9ff); ensureGradientSky().visible = true;
-      dir.color.set(0xf4f8ff); dir.intensity = 0.56; sun.visible = false; moon.visible = false;
-      hemi.color.set(0xe8f3ff); hemi.groundColor.set(0xbfccd8); hemi.intensity = 0.24;
-      setAmbientIntensity(0.2); applyGroundTextureSet(snowGroundTex, true);
+      dir.color.set(0xf4f8ff); dir.intensity = 1.76; sun.visible = false; moon.visible = false;
+      hemi.color.set(0xe8f3ff); hemi.groundColor.set(0xbfccd8); hemi.intensity = 0.75;
+      setAmbientIntensity(0.63); applyGroundTextureSet(snowGroundTex, true);
       ensureSnowSystem();
       break;
     case 'sunny':

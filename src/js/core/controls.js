@@ -62,6 +62,9 @@ export function initPointerLock(opts) {
 
   _controls = new PointerLockControls(camera, document.body);
   _controls.pointerSpeed = getLookSensitivity();
+  if (typeof _controls.getObject !== 'function') {
+    _controls.getObject = () => _controls.object || camera;
+  }
   scene.add(_controls.getObject());
 
   // On touch/mobile devices, pointer lock is unsupported or highly buggy.

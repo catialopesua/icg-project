@@ -511,7 +511,7 @@ export function createGardenZone(scene, cx, cz){
 
       const lampBoxL = new THREE.Box3().setFromObject(lampL);
       const lampTopL = (lampBoxL && lampBoxL.max && isFinite(lampBoxL.max.y)) ? lampBoxL.max.y : (lampL.position.y + 2.0 * lampL.scale.y);
-      const spotL = new THREE.SpotLight(0xffd699, 2.5, 20, Math.PI / 2.5, 0.9, 2);
+      const spotL = new THREE.SpotLight(0xffd699, 80.0, 20, Math.PI / 2.5, 0.9, 2);
       spotL.position.set(lampL.position.x, lampTopL - 0.5, lampL.position.z + 0.17);
       spotL.target.position.set(lampL.position.x, 0.05, lampL.position.z);
       spotL.castShadow = false;
@@ -523,7 +523,7 @@ export function createGardenZone(scene, cx, cz){
 
       const lampBoxR = new THREE.Box3().setFromObject(lampR);
       const lampTopR = (lampBoxR && lampBoxR.max && isFinite(lampBoxR.max.y)) ? lampBoxR.max.y : (lampR.position.y + 2.0 * lampR.scale.y);
-      const spotR = new THREE.SpotLight(0xffd699, 2.5, 20, Math.PI / 2.5, 0.9, 2);
+      const spotR = new THREE.SpotLight(0xffd699, 80.0, 20, Math.PI / 2.5, 0.9, 2);
       spotR.position.set(lampR.position.x, lampTopR - 0.5, lampR.position.z - 0.17);
       spotR.target.position.set(lampR.position.x, 0.05, lampR.position.z);
       spotR.castShadow = false;

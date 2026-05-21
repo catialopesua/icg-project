@@ -10,7 +10,7 @@ export const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }
 renderer.setPixelRatio(window.devicePixelRatio || 1);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.setClearColor(0x02030a);
 if (container) {
   container.appendChild(renderer.domElement);
@@ -35,9 +35,10 @@ export const camera = new THREE.PerspectiveCamera(
 camera.position.set(0, 2.0, 5);
 
 // ---------------------------------------------------------------------------
-// Clock
+// Timer
 // ---------------------------------------------------------------------------
-export const clock = new THREE.Clock();
+export const timer = new THREE.Timer();
+timer.connect(document);
 
 // ---------------------------------------------------------------------------
 // Resize
@@ -71,10 +72,11 @@ export function addAnimationHook(fn) {
  * Starts the render loop. Call once from main.js after all hooks are registered.
  */
 export function startAnimationLoop() {
-  function loop() {
+  function loop(timestamp) {
     requestAnimationFrame(loop);
-    const dt = clock.getDelta();
-    const elapsed = clock.elapsedTime;
+    timer.update(timestamp);
+    const dt = timer.getDelta();
+    const elapsed = timer.getElapsed();
 
     for (let i = 0; i < _hooks.length; i++) {
       try { _hooks[i](dt, elapsed); } catch (e) { /* keep loop alive */ }

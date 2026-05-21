@@ -15,13 +15,13 @@ export const NIGHT_STREETLIGHT_SHADOW_RANGE = 24;
 // ---------------------------------------------------------------------------
 // Ambient light
 // ---------------------------------------------------------------------------
-scene.add(new THREE.AmbientLight(0xffffff, 0.06));
+scene.add(new THREE.AmbientLight(0xffffff, 0.2));
 
 // ---------------------------------------------------------------------------
 // Directional light (starts in night configuration)
 // ---------------------------------------------------------------------------
 /** @type {THREE.DirectionalLight} */
-export const dir = new THREE.DirectionalLight(0x7688c0, 0.15);
+export const dir = new THREE.DirectionalLight(0x7688c0, 0.5);
 dir.position.copy(NIGHT_LIGHT_POS);
 dir.castShadow = true;
 dir.shadow.mapSize.set(4096, 4096);
@@ -44,7 +44,7 @@ dir.target.updateMatrixWorld(true);
 // Hemisphere light
 // ---------------------------------------------------------------------------
 /** @type {THREE.HemisphereLight} */
-export const hemi = new THREE.HemisphereLight(0x0a1b2e, 0x02040a, 0.05);
+export const hemi = new THREE.HemisphereLight(0x0a1b2e, 0x02040a, 0.16);
 scene.add(hemi);
 
 // ---------------------------------------------------------------------------

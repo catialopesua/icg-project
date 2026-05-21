@@ -117,7 +117,7 @@ export function createPartyScene(layout) {
     partySceneGroup.userData.confetti.push(confetti);
   }
 
-  const partyLight = new THREE.PointLight(0xffd69a, 1.2, 12, 1.7);
+  const partyLight = new THREE.PointLight(0xffd69a, 45.0, 12, 1.7);
   partyLight.position.set(tablePlacement.x, tablePlacement.y + 3.3 * tableScale, tablePlacement.z + 0.8 * tableScale);
   partySceneGroup.add(partyLight);
 
