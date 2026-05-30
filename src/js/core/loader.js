@@ -1,15 +1,28 @@
+/**
+ * 3D MODEL LOADER SYSTEM
+ * 
+ * Handles loading and setup of 3D character models:
+ * - Loads GLTF/GLB models from Blender exports
+ * - Configures shadows and shading
+ * - Scales models to appropriate heights
+ * - Positions models correctly in the scene
+ * - Applies smooth shading for visual quality
+ */
+
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { scene } from './engine.js';
 import { enableShadows, scaleModelToHeight, placeModelOnGround, smoothModelShading } from './models.js';
 
-const loader = new GLTFLoader();
+const loader = new GLTFLoader(); // Reusable GLTF loader instance
 
 /**
- * Loads a friend model and places it in the scene.
- * @param {Object} def 
- * @param {Object} placement 
- * @param {Function} onLoaded 
+ * Loads a friend character model and sets it up in the scene.
+ * Applies shadows, scaling, positioning, and smooth shading.
+ * 
+ * @param {Object} def - Friend definition with fileName and desiredHeight
+ * @param {Object} placement - Position and rotation data
+ * @param {Function} onLoaded - Callback when model is loaded
  */
 export function loadFriendModel(def, placement, onLoaded) {
   loader.load(`./models/Blender/Friends/${def.fileName}`, (gltf) => {

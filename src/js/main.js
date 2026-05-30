@@ -1,3 +1,19 @@
+/**
+ * MAIN GAME ENTRY POINT
+ * 
+ * This is the core initialization and game loop orchestrator for Birthday Party Quest.
+ * It handles:
+ * - Scene setup and Three.js initialization
+ * - All game systems initialization (audio, controls, UI, physics, etc.)
+ * - Game state management and player progression
+ * - Multi-zone environment handling
+ * - Party sequence management
+ * 
+ * NOTE: GitHub Copilot was used extensively in the development of this file for:
+ * - Code organization and structure
+ * - Complex mathematical animations
+ */
+
 import * as THREE from 'three';
 import { scene, camera, renderer, addAnimationHook, startAnimationLoop } from './core/engine.js';
 import { initAudioListener, setupAudioSettings, setupSensitivitySettings, playNewQuestSound, playPartyMusic } from './core/audio.js';
@@ -55,23 +71,30 @@ import { preparePartyScene, updatePartyProps, loadPartyCakeAsset } from './core/
 console.log('Main.js initializing...');
 
 // ---------------------------------------------------------------------------
-// Global State
+// GLOBAL GAME STATE
+// Tracks player progress, interactions, and unlocks
 // ---------------------------------------------------------------------------
-let unlockedFriendIds = new Set();
-let timDialogueCompleted = false;
-let partyCutsceneStarted = false;
-let hasJoinedOnce = false;
-let playerHeight = 1.6;
+let unlockedFriendIds = new Set(); // Set of friend IDs the player has found
+let timDialogueCompleted = false; // Whether player has spoken to Tim
+let partyCutsceneStarted = false; // Whether final party celebration has begun
+let hasJoinedOnce = false; // Whether player has entered the game world
+let playerHeight = 1.6; // Height of player camera above feet
 
+// Initialize friends with locked state - info unlocks when player finds them
 const friendsState = FRIEND_DEFS.map(def => ({
   id: def.id, name: '???', description: 'Find this friend to unlock their info!', weather: '🔒 Locked', image: '', unlocked: false
 }));
 
 // ---------------------------------------------------------------------------
-// World Setup
+// WORLD SETUP & ENVIRONMENT CREATION
+// Creates terrain, zones, and environmental assets with textures
 // ---------------------------------------------------------------------------
+// NOTE: This world creation uses complex mathematical positioning developed with GitHub Copilot
+// Create terrain textures with proper scaling and material properties
 const grassGroundTex = makeTerrainTextureSet('./textures/Grass002_2K-JPG/Grass002_2K-JPG', 30);
 const snowGroundTex = makeTerrainTextureSet('./textures/Snow015_2K-JPG/Snow015_2K-JPG', 12);
+
+// Set up physically-based material for realistic grass appearance
 const groundMat = new THREE.MeshStandardMaterial({
   map: grassGroundTex.map,
   normalMap: grassGroundTex.normal,
@@ -81,41 +104,52 @@ const groundMat = new THREE.MeshStandardMaterial({
   roughness: 0.95,
   metalness: 0.01
 });
+// Create ground plane and add to scene
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), groundMat);
-ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+ground.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+ground.receiveShadow = true; // Ground receives shadows from objects
+scene.add(ground);
 
-createGardenZone(scene, PARK_CENTER_X, PARK_CENTER_Z);
-const forestZone = createForestZone(scene, PARK_CENTER_X, PARK_CENTER_Z);
-createCityZone(scene, 22, -4);
-const beachZone = createBeachZone(scene, 0, 12);
+// Create the four different zones for the game world
+// Each zone has unique environmental assets, NPCs, and visual themes
+createGardenZone(scene, PARK_CENTER_X, PARK_CENTER_Z); // Garden zone
+const forestZone = createForestZone(scene, PARK_CENTER_X, PARK_CENTER_Z); // Forest zone
+createCityZone(scene, 22, -4); // City zone
+const beachZone = createBeachZone(scene, 0, 12); // Beach zone
 
 // ---------------------------------------------------------------------------
-// Intro Camera — top-down view over the city, animates until player joins
+// INTRO CAMERA SETUP
+// Creates initial top-down cinematic view that pans over the city
+// This animation plays before the player joins the game
 // ---------------------------------------------------------------------------
-/** City zone centre used for the intro flyover. */
-const INTRO_CITY_X = -3;
-const INTRO_CITY_Z = -7;
-const INTRO_CAM_Y = 40;   // height above ground
-const INTRO_PAN_RADIUS = 10; // gentle orbit radius
+// City zone centre used for the intro flyover
+const INTRO_CITY_X = -3; // X coordinate of intro focus point
+const INTRO_CITY_Z = -7; // Z coordinate of intro focus point
+const INTRO_CAM_Y = 40;   // Height of camera above ground for aerial view
+const INTRO_PAN_RADIUS = 10; // Radius of gentle orbiting motion during intro
 
-// Position camera immediately so the very first rendered frame looks right.
+// Initialize camera for intro sequence - positioned for aerial view of city
 camera.position.set(INTRO_CITY_X, INTRO_CAM_Y, INTRO_CITY_Z);
-camera.rotation.set(-Math.PI / 2, 0, 0); // look straight down
+camera.rotation.set(-Math.PI / 2, 0, 0); // Point camera straight down for cinematic view
 
 
 // ---------------------------------------------------------------------------
-// Core Systems
+// CORE GAME SYSTEMS INITIALIZATION
+// Sets up all major subsystems required for gameplay
 // ---------------------------------------------------------------------------
+// Initialize 3D audio listener attached to camera for spatial sound
 initAudioListener(camera);
 
+// Detect mobile device and initialize appropriate control scheme
 let mobileControlsContainer = null;
-const isMobileDevice = isMobile();
+const isMobileDevice = isMobile(); // Detect if running on touch device
 
 if (isMobileDevice) {
+  // Initialize on-screen touch controls for mobile devices
   mobileControlsContainer = initMobileControls(camera);
-  mobileControlsContainer.style.display = 'none';
+  mobileControlsContainer.style.display = 'none'; // Hidden until player joins
 
-  // Swap all "Click" prompts to "Tap" so the UI makes sense on touch devices.
+  // Update UI prompts for touch devices ("Click" → "Tap")
   const playPrompt = document.getElementById('play-prompt');
   if (playPrompt) playPrompt.textContent = 'Tap anywhere to play';
 
@@ -123,8 +157,10 @@ if (isMobileDevice) {
   if (pausePrompt) pausePrompt.textContent = 'Tap anywhere to resume';
 }
 
+// Handler called when player first enters the game world
 const triggerFirstJoin = () => {
   if (!hasJoinedOnce) {
+    // Load player starting position and orientation
     const start = loadPlayerStart();
     controls.getObject().position.set(start.x || -18, (start.y || 0) + playerHeight, start.z || 20);
     controls.getObject().rotation.y = start.rotationY || 0;
@@ -132,22 +168,24 @@ const triggerFirstJoin = () => {
     controls.getObject().rotation.z = 0;
     hasJoinedOnce = true;
 
+    // Hide intro overlay and transition to gameplay
     const blockerEl = document.getElementById('blocker');
     if (blockerEl) blockerEl.classList.add('hidden');
     document.body.classList.remove('pregame');
-    playNewQuestSound();
+    playNewQuestSound(); // Play sound effect on game start
 
     if (isMobileDevice && mobileControlsContainer) {
+      // Show mobile controls after player joins
       mobileControlsContainer.style.display = 'block';
-      // Replace the keyboard hint with a short abbreviation that fits the INT button
+      // Update interact hint to fit mobile button
       const hint = document.getElementById('interact-hint');
       if (hint) hint.innerText = 'INT';
 
-      // #interact-ui tooltip — shown when close to an NPC
+      // Update interact UI tooltip for touch devices
       const intUI = document.getElementById('interact-ui');
       if (intUI) intUI.innerText = 'Tap INT to interact';
 
-      // Fake pointer lock state so interaction checks pass on mobile
+      // Simulate pointer lock state for mobile devices
       controls.isLocked = true;
     }
   }

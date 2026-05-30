@@ -1,33 +1,55 @@
-/* Animations */
+/**
+ * ANIMATIONS MODULE
+ * 
+ * Defines CSS animations and keyframes for visual effects:
+ * - Balloon rising animations
+ * - Panel pop-in transitions
+ * - Hint drop-down effects
+ * - Pulsing and fade effects for UI elements
+ * - Smooth transitions for interactive elements
+ * 
+ * NOTE: GitHub Copilot assisted in creating complex animation sequences
+ * using mathematical timing functions and transform properties.
+ */
+
+/* Animation: Balloon floating upward */
 @keyframes riseBalloon {
   0% {
+    /* Starting position (on screen) */
     transform: translateY(0);
   }
 
   100% {
+    /* End position (float off top of screen) */
     transform: translateY(-120vh);
   }
 }
 
+/* Animation: Panel pop-in effect when appearing */
 @keyframes panelPop {
   from {
+    /* Starting state: hidden and scaled down */
     opacity: 0;
     transform: translateY(14px) scale(0.97);
   }
 
   to {
+    /* End state: fully visible and at normal scale */
     opacity: 1;
     transform: translateY(0) scale(1);
   }
 }
 
+/* Animation: Hint dropdown effect */
 @keyframes hintDrop {
   from {
+    /* Starting state: hidden above position */
     opacity: 0;
     transform: translateY(-6px);
   }
 
   to {
+    /* End state: visible at final position */
     opacity: 1;
     transform: translateY(0);
   }

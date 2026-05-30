@@ -1,3 +1,19 @@
+/**
+ * DEBUG MODE
+ * 
+ * Special development mode that provides tools for world-building and asset placement.
+ * This mode allows developers to:
+ * - Orbit and navigate the scene freely with precise camera control
+ * - Place and position 3D models visually
+ * - Experiment with environmental setups
+ * - Toggle weather systems and visual elements
+ * - Test layout configurations
+ * 
+ * NOTE: GitHub Copilot was instrumental in developing this debug mode system,
+ * helping with the implementation of camera controls, model placement logic,
+ * and the overall debugging interface.
+ */
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -32,14 +48,15 @@ import {
 } from './party.js';
 
 const PAINT_SPACING = {
-  tree: 2.8,
-  grass: 1.4,
-  rock1: 2.0,
-  rock2: 2.0,
-  rock3: 1.9,
-  trafficcone: 1.2
+  tree: 2.8, // Minimum spacing between placed trees
+  grass: 1.4, // Minimum spacing between grass clusters
+  rock1: 2.0, // Minimum spacing for rock type 1
+  rock2: 2.0, // Minimum spacing for rock type 2
+  rock3: 1.9, // Minimum spacing for rock type 3
+  trafficcone: 1.2 // Minimum spacing for traffic cones
 };
 
+// Display names for each asset type in the UI
 const TYPE_LABELS = {
   tree: 'Tree',
   grass: 'Grass',
@@ -49,6 +66,7 @@ const TYPE_LABELS = {
   trafficcone: 'Traffic Cone'
 };
 
+// Visual colors for asset types (used for gizmos and selection highlighting)
 const TYPE_COLORS = {
   tree: 0x2e7a38,
   grass: 0x84bc4a,
@@ -58,7 +76,12 @@ const TYPE_COLORS = {
   trafficcone: 0xff6a00
 };
 
+// ---------------------------------------------------------------------------
+// NPC AND CHARACTER SELECTION SETTINGS
+// ---------------------------------------------------------------------------
+// Radius within which friends can be selected for editing
 const FRIEND_SELECT_RADIUS = 3.2;
+// Color codes for each of the 5 friends for visual identification
 const FRIEND_COLORS = {
   friend1: 0x4f8cff,
   friend2: 0xff4fbd,
@@ -66,65 +89,90 @@ const FRIEND_COLORS = {
   friend4: 0x86e3ff,
   friend5: 0xa64fff
 };
+// Tim's character color (the birthday boy)
 const TIM_COLOR = 0xffd34f;
+// Player spawn point color in debug mode
 const SPAWN_COLOR = 0x40b868;
+
+// ---------------------------------------------------------------------------
+// PARTY SCENE SETTINGS
+// ---------------------------------------------------------------------------
+// Radius within which party elements can be selected for editing
 const PARTY_SELECT_RADIUS = 2.6;
+// Color codes for party scene elements
 const PARTY_COLORS = {
   table: 0xf2539d,
   balloons: 0x63d7ff,
   participant: 0xffc247
 };
 
+// ---------------------------------------------------------------------------
+// DOM ELEMENT REFERENCES
+// Cache references to all UI controls in debug mode
+// ---------------------------------------------------------------------------
 const container = document.getElementById('canvas-container');
-const statusEl = document.getElementById('debug-status');
-const outputEl = document.getElementById('layout-output');
-const copyButton = document.getElementById('copy-layout');
-const deleteSelectedButton = document.getElementById('delete-selected');
-const resetButton = document.getElementById('reset-layout');
-const rotationStepInput = document.getElementById('rotation-step');
-const rotationStepValue = document.getElementById('rotation-step-value');
-const editForestButton = document.getElementById('edit-forest');
-const editFriendsButton = document.getElementById('edit-friends');
-const editTimButton = document.getElementById('edit-tim');
-const editSpawnButton = document.getElementById('edit-spawn');
-const editPartyButton = document.getElementById('edit-party');
+const statusEl = document.getElementById('debug-status'); // Status display
+const outputEl = document.getElementById('layout-output'); // Code output
+const copyButton = document.getElementById('copy-layout'); // Copy to clipboard
+const deleteSelectedButton = document.getElementById('delete-selected'); // Delete button
+const resetButton = document.getElementById('reset-layout'); // Reset to defaults
+const rotationStepInput = document.getElementById('rotation-step'); // Rotation increment
+const rotationStepValue = document.getElementById('rotation-step-value'); // Display value
+const editForestButton = document.getElementById('edit-forest'); // Forest editor
+const editFriendsButton = document.getElementById('edit-friends'); // Friends editor
+const editTimButton = document.getElementById('edit-tim'); // Tim editor
+const editSpawnButton = document.getElementById('edit-spawn'); // Spawn point editor
+const editPartyButton = document.getElementById('edit-party'); // Party scene editor
+
+// Mode buttons for switching between paint and select modes
 const paintModeButton = document.getElementById('paint-mode');
 const selectModeButton = document.getElementById('select-mode');
+
+// Asset palette buttons for placing different object types
 const paintPaletteElement = document.getElementById('paint-palette');
 const friendPaletteElement = document.getElementById('friend-palette');
 const partyPaletteElement = document.getElementById('party-palette');
 const paletteButtons = Array.from(document.querySelectorAll('[data-item-type]'));
 const friendPaletteButtons = Array.from(document.querySelectorAll('[data-friend-id]'));
 const partyPaletteButtons = Array.from(document.querySelectorAll('[data-party-id]'));
+
+// Placement editor UI for fine-tuning position and rotation
 const placementEditorElement = document.getElementById('placement-editor');
 const placementTitleElement = document.getElementById('placement-title');
-const placementXInput = document.getElementById('placement-x');
-const placementYInput = document.getElementById('placement-y');
-const placementZInput = document.getElementById('placement-z');
-const placementRotationInput = document.getElementById('placement-rotation');
+const placementXInput = document.getElementById('placement-x'); // X coordinate
+const placementYInput = document.getElementById('placement-y'); // Y coordinate
+const placementZInput = document.getElementById('placement-z'); // Z coordinate
+const placementRotationInput = document.getElementById('placement-rotation'); // Rotation value
 const placementScaleRow = document.getElementById('placement-scale-row');
-const placementScaleInput = document.getElementById('placement-scale');
+const placementScaleInput = document.getElementById('placement-scale'); // Scale factor
 
+// ---------------------------------------------------------------------------
+// THREE.JS SCENE SETUP
+// Initializes renderer, camera, and lighting for debug visualization
+// ---------------------------------------------------------------------------
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xdce9d9);
-scene.fog = new THREE.Fog(0xdce9d9, 55, 150);
+scene.background = new THREE.Color(0xdce9d9); // Light green background
+scene.fog = new THREE.Fog(0xdce9d9, 55, 150); // Fog for depth perception
 
+// WebGL renderer configuration
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio || 1);
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.enabled = true; // Enable shadow mapping
+renderer.shadowMap.type = THREE.PCFShadowMap; // Soft shadows
 container.appendChild(renderer.domElement);
 
+// Perspective camera for realistic view
 const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 300);
 camera.position.set(24, 38, 42);
 
+// Orbit controls for camera navigation (GitHub Copilot assisted with this implementation)
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.target.set(-10, 0, 8);
-controls.minDistance = 14;
-controls.maxDistance = 95;
-controls.maxPolarAngle = Math.PI * 0.48;
+controls.enableDamping = true; // Smooth camera movement
+controls.target.set(-10, 0, 8); // Initial look-at point
+controls.minDistance = 14; // Closest zoom distance
+controls.maxDistance = 95; // Farthest zoom distance
+controls.maxPolarAngle = Math.PI * 0.48; // Prevent looking too far up/down
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.8);
 scene.add(ambient);

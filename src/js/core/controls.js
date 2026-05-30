@@ -1,3 +1,14 @@
+/**
+ * PLAYER CONTROLS SYSTEM
+ * 
+ * Handles player movement and camera control:
+ * - Pointer lock for seamless first-person look
+ * - Keyboard input (WASD) for movement
+ * - Gravity and jumping physics
+ * - Collision detection integration
+ * - Mobile and desktop control schemes
+ */
+
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { scene, camera } from './engine.js';
@@ -11,12 +22,16 @@ import {
 } from './collision.js';
 
 // ---------------------------------------------------------------------------
-// Module-level controls reference (populated by initPointerLock)
+// MODULE STATE
+// Stores reference to the controls instance for use throughout the game
 // ---------------------------------------------------------------------------
-
-/** @type {PointerLockControls|null} */
+/** Global reference to PointerLockControls instance */
 let _controls = null;
 
+/**
+ * Retrieves the global controls instance.
+ * @returns {PointerLockControls|null} The pointer lock controls, or null if not initialized
+ */
 /** @returns {PointerLockControls|null} */
 export function getControls() {
   return _controls;
@@ -25,18 +40,23 @@ export function getControls() {
 // ---------------------------------------------------------------------------
 // Public init
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// POINTER LOCK INITIALIZATION
+// Sets up first-person camera and movement controls
+// ---------------------------------------------------------------------------
 /**
+ * Configuration options for pointer lock controls
  * @typedef {Object} PointerLockOptions
- * @property {number} playerHeight
- * @property {boolean} partyCutsceneTransitioning - getter fn, called each frame
- * @property {() => boolean} isInputBlocked - called each frame to suppress movement
- * @property {() => void} onFirstJoin - called on the first pointer-lock event
- * @property {() => void} onLockAcquired
- * @property {() => void} onLockReleased
- * @property {HTMLElement|null} playButton
- * @property {HTMLElement|null} instructions
- * @property {HTMLElement|null} blocker
- * @property {HTMLElement|null} pauseOverlay
+ * @property {number} playerHeight - Height of camera above ground
+ * @property {boolean} partyCutsceneTransitioning - Is party cutscene playing
+ * @property {() => boolean} isInputBlocked - Callback to check if input should be blocked
+ * @property {() => void} onFirstJoin - Called when player first takes control
+ * @property {() => void} onLockAcquired - Called when pointer lock is acquired
+ * @property {() => void} onLockReleased - Called when pointer lock is released
+ * @property {HTMLElement|null} playButton - Button that initiates pointer lock
+ * @property {HTMLElement|null} instructions - Intro instructions overlay
+ * @property {HTMLElement|null} blocker - Overlay blocker element
+ * @property {HTMLElement|null} pauseOverlay - Pause menu overlay
  */
 
 /**

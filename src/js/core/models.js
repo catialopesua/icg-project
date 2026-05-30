@@ -1,24 +1,43 @@
+/**
+ * 3D MODEL UTILITIES
+ * 
+ * Helper functions for working with 3D models:
+ * - Shadow configuration on model meshes
+ * - Automatic scaling to desired heights
+ * - Ground plane positioning
+ * - Smooth shading for visual quality
+ * - Animation setup and management
+ */
+
 import * as THREE from 'three';
 
+// ---------------------------------------------------------------------------
+// SHADOW CONFIGURATION
+// ---------------------------------------------------------------------------
 /**
- * Enables cast and receive shadows on every mesh in a model.
- * @param {THREE.Object3D} model
+ * Recursively enables shadow casting and receiving on all meshes in a model.
+ * This ensures the model interacts properly with the shadow system.
+ * @param {THREE.Object3D} model - The model to configure
  */
 export function enableShadows(model) {
+  // Traverse all nodes in the model hierarchy
   model.traverse((node) => {
     if (node.isMesh) {
-      node.castShadow = true;
-      node.receiveShadow = true;
+      node.castShadow = true; // This mesh casts shadows onto others
+      node.receiveShadow = true; // This mesh can have shadows cast onto it
     }
   });
 }
 
+// ---------------------------------------------------------------------------
+// MODEL SCALING
+// ---------------------------------------------------------------------------
 /**
- * Scales a model uniformly so its bounding-box height matches `desiredHeight`.
- * Returns the pre-scale bounding box (useful for ground placement).
- * @param {THREE.Object3D} model
- * @param {number} desiredHeight
- * @returns {THREE.Box3}
+ * Scales a model uniformly so its bounding box height matches the desired height.
+ * Useful for ensuring characters are the right size in the world.
+ * @param {THREE.Object3D} model - The model to scale
+ * @param {number} desiredHeight - Target height in world units
+ * @returns {THREE.Box3} The original (pre-scale) bounding box
  */
 export function scaleModelToHeight(model, desiredHeight) {
   const box = new THREE.Box3().setFromObject(model);

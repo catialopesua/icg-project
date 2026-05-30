@@ -1,3 +1,14 @@
+/**
+ * NPC INTERACTION SYSTEM
+ * 
+ * Handles player interactions with NPCs:
+ * - Proximity detection to NPCs (Tim and friends)
+ * - Interaction prompts and hints
+ * - Dialogue triggering and management
+ * - Friend discovery and unlock progression
+ * - Quest notifications
+ */
+
 import * as THREE from 'three';
 import { camera, scene } from './engine.js';
 import { playChatContinueSound } from './audio.js';
@@ -12,22 +23,25 @@ import {
 } from '../ui/menus.js';
 
 // ---------------------------------------------------------------------------
-// Constants
+// INTERACTION CONFIGURATION CONSTANTS
 // ---------------------------------------------------------------------------
+/** Maximum distance at which player can interact with NPCs */
 const INTERACT_DISTANCE = 2.0;
+/** Minimum dot product for player to be considered "facing" an NPC */
 const FACING_DOT_THRESHOLD = 0.60;
 
 // ---------------------------------------------------------------------------
-// Internal state
+// INTERACTION STATE
+// Tracks NPCs, player state, and dialogue progression
 // ---------------------------------------------------------------------------
-let _controls = null;
-let _actor = null;                  // Tim NPC
-let _friendActors = [];
-let _friendActorsById = new Map();
-let _unlockedFriendIds = new Set();
-let _timDialogueCompleted = false;
-let _partyCutsceneStarted = false;
-let _activeDialogue = null;
+let _controls = null; // Player controls reference
+let _actor = null; // Tim NPC reference
+let _friendActors = []; // Array of friend NPCs
+let _friendActorsById = new Map(); // Map of friend IDs to actor instances
+let _unlockedFriendIds = new Set(); // Set of friends the player has found
+let _timDialogueCompleted = false; // Whether Tim's initial dialogue has played
+let _partyCutsceneStarted = false; // Whether final party cutscene is active
+let _activeDialogue = null; // Currently active dialogue instance
 let _activeDialogueIndex = -1;
 
 // Callbacks provided by main.js

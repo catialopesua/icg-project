@@ -1,3 +1,17 @@
+/**
+ * PARTY SYSTEM
+ * 
+ * Manages the final celebration scene when all friends are found:
+ * - Loads and positions the party cake asset
+ * - Arranges friend characters for the party celebration
+ * - Handles party background music and ambient effects
+ * - Manages collision boxes for party scene objects
+ * - Triggers party animations and visual effects
+ * 
+ * NOTE: GitHub Copilot assisted in developing the animation sequences
+ * and complex positioning logic for the party celebration scene.
+ */
+
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { scene } from './engine.js';

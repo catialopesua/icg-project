@@ -1,3 +1,15 @@
+/**
+ * WEATHER & ENVIRONMENT SYSTEM
+ * 
+ * Manages dynamic weather and lighting effects:
+ * - Day/night cycle transitions
+ * - Multiple sky environments (day, sunset, night, northern lights)
+ * - Weather effects (particles, precipitation)
+ * - Dynamic lighting adjustments for weather
+ * - Environmental atmosphere changes
+ * - Sky dome rotation and animation
+ */
+
 import * as THREE from 'three';
 import { scene, renderer, camera } from './engine.js';
 import {
@@ -14,19 +26,30 @@ import {
   syncSceneMeshShadows
 } from './lighting.js';
 
-const textureLoader = new THREE.TextureLoader();
+// ---------------------------------------------------------------------------
+// SKY ENVIRONMENT LOADING
+// Loads and prepares HDRI textures for different weather conditions
+// ---------------------------------------------------------------------------
+const textureLoader = new THREE.TextureLoader(); // Reusable texture loader
 
+/**
+ * Loads and configures a sky texture for use as scene background.
+ * Sets up equirectangular mapping and proper color space for HDRIs.
+ * @param {string} path - Path to the sky texture image
+ * @returns {THREE.Texture} Configured sky texture
+ */
 function loadSkyTexture(path) {
   const tex = textureLoader.load(path);
-  tex.mapping = THREE.EquirectangularReflectionMapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.mapping = THREE.EquirectangularReflectionMapping; // Use for 360 degree sky
+  tex.colorSpace = THREE.SRGBColorSpace; // Proper color space for visual quality
   return tex;
 }
 
-const daySkyTexture = loadSkyTexture('./environment/DaySkyHDRI001B_4K/DaySkyHDRI001B_4K_TONEMAPPED.jpg');
-const sunsetSkyTexture = loadSkyTexture('./environment/EveningSkyHDRI022B_4K/EveningSkyHDRI022B_4K_TONEMAPPED.jpg');
-const nightSkyTexture = loadSkyTexture('./environment/NightSkyHDRI003_4K/NightSkyHDRI003_4K_TONEMAPPED.jpg');
-const northernLightsSkyTexture = loadSkyTexture('./environment/NightSkyHDRI007_4K/NightSkyHDRI007_4K_TONEMAPPED.jpg');
+// Load all four weather/time-of-day sky textures
+const daySkyTexture = loadSkyTexture('./environment/DaySkyHDRI001B_4K/DaySkyHDRI001B_4K_TONEMAPPED.jpg'); // Daytime sky
+const sunsetSkyTexture = loadSkyTexture('./environment/EveningSkyHDRI022B_4K/EveningSkyHDRI022B_4K_TONEMAPPED.jpg'); // Sunset/evening
+const nightSkyTexture = loadSkyTexture('./environment/NightSkyHDRI003_4K/NightSkyHDRI003_4K_TONEMAPPED.jpg'); // Night sky
+const northernLightsSkyTexture = loadSkyTexture('./environment/NightSkyHDRI007_4K/NightSkyHDRI007_4K_TONEMAPPED.jpg'); // Northern lights
 
 let currentWeather = 'sunny';
 let particlesEnabled = true;

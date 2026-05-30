@@ -1,33 +1,60 @@
 import * as THREE from 'three';
 import { scene, renderer } from './engine.js';
 
+/**
+ * LIGHTING & SHADOWS SYSTEM
+ * 
+ * Manages all lighting and shadow rendering:
+ * - Directional light for sun/moon
+ * - Ambient light for base illumination
+ * - Dynamic lighting for day/night cycles
+ * - Shadow mapping for realistic shadows
+ * - Street light shadows in night mode
+ * - Shadow camera positioning and bounds
+ * 
+ * NOTE: GitHub Copilot assisted in optimizing the shadow configuration
+ * for performance and visual quality.
+ */
+
 // ---------------------------------------------------------------------------
-// Shadow / light constants
+// LIGHTING CONFIGURATION
+// Constants for day/night cycle and shadow setup
 // ---------------------------------------------------------------------------
+/** Position of directional light during daytime */
 export const DAY_LIGHT_POS = new THREE.Vector3(15, 56, 37);
+/** Position of directional light during nighttime (moon) */
 export const NIGHT_LIGHT_POS = new THREE.Vector3(-24, 26, -16);
+/** Position that the light targets (shadow focus point) */
 export const SHADOW_TARGET_POS = new THREE.Vector3(2, 0, 14);
+/** Shadow camera bounds for daytime */
 export const DAY_SHADOW_BOUNDS = 46;
+/** Shadow camera bounds for nighttime */
 export const NIGHT_SHADOW_BOUNDS = 44;
+/** Maximum number of street light shadows in night mode */
 export const MAX_DYNAMIC_NIGHT_STREETLIGHT_SHADOWS = 2;
+/** Range at which street lights cast shadows at night */
 export const NIGHT_STREETLIGHT_SHADOW_RANGE = 24;
 
 // ---------------------------------------------------------------------------
-// Ambient light
+// BASE AMBIENT LIGHTING
+// Provides overall illumination that lights all areas
 // ---------------------------------------------------------------------------
+/** Add ambient light for overall scene illumination */
 scene.add(new THREE.AmbientLight(0xffffff, 0.2));
 
 // ---------------------------------------------------------------------------
-// Directional light (starts in night configuration)
+// DIRECTIONAL LIGHT (Sun/Moon)
+// Main light source that casts shadows, changes for day/night cycle
 // ---------------------------------------------------------------------------
-/** @type {THREE.DirectionalLight} */
+/** Directional light that acts as the sun during day or moon at night */
 export const dir = new THREE.DirectionalLight(0x7688c0, 0.5);
+// Initialize in night configuration
 dir.position.copy(NIGHT_LIGHT_POS);
-dir.castShadow = true;
-dir.shadow.mapSize.set(4096, 4096);
-dir.shadow.camera.near = 0.5;
-dir.shadow.bias = -0.001;
-dir.shadow.normalBias = 0.05;
+dir.castShadow = true; // Enable shadow casting
+dir.shadow.mapSize.set(4096, 4096); // High resolution shadows
+dir.shadow.camera.near = 0.5; // Near plane for shadow camera
+dir.shadow.bias = -0.001; // Bias to prevent shadow artifacts
+dir.shadow.normalBias = 0.05; // Normal bias for smooth shadows
 dir.shadow.camera.far = 140;
 dir.shadow.camera.left = -NIGHT_SHADOW_BOUNDS;
 dir.shadow.camera.right = NIGHT_SHADOW_BOUNDS;

@@ -1,8 +1,25 @@
+/**
+ * USER INTERFACE & MENU SYSTEM
+ * 
+ * Manages all UI overlays, menus, and HUD elements:
+ * - Main menu and intro overlay
+ * - Quest notifications and objectives
+ * - Friends found panel with character portraits
+ * - Chat bubbles for NPC interactions
+ * - Weather unlock notifications
+ * - Pause menu and game state overlays
+ * - Interactive hints and UI feedback
+ * 
+ * NOTE: GitHub Copilot was crucial in developing the user interface,
+ * helping with DOM manipulation, event handling, and UI state management.
+ */
+
 import * as THREE from 'three';
 import { isMobile } from './mobileControls.js';
 
 // ---------------------------------------------------------------------------
-// Panel registry
+// UI PANEL REGISTRY & STATE MANAGEMENT
+// Tracks all DOM elements for efficient access and updates
 // ---------------------------------------------------------------------------
 /** @type {Record<string, HTMLElement|null>} */
 let _panelById = {};
@@ -39,44 +56,47 @@ let _requestUnlock = null;
 // Public init
 // ---------------------------------------------------------------------------
 /**
- * @typedef {Object} MenusOptions
- * @property {Record<string, HTMLElement|null>} panelById
- * @property {HTMLElement|null} chatBubble
- * @property {HTMLElement|null} questText
- * @property {HTMLElement|null} pauseOverlay
- * @property {HTMLElement|null} blocker
- * @property {HTMLElement|null} interactHint
- * @property {HTMLElement|null} weatherUnlockToast
- * @property {HTMLElement|null} weatherUnlockedCount
- * @property {HTMLElement|null} friendsList
- * @property {HTMLElement|null} friendsFoundCount
- * @property {HTMLButtonElement|null} weatherToggleButton
- * @property {HTMLButtonElement|null} friendsToggleButton
- * @property {HTMLButtonElement|null} settingsToggleButton
- * @property {HTMLButtonElement|null} helpToggleButton
- * @property {HTMLButtonElement[]} closePanelButtons
- * @property {() => void} requestRelock
- * @property {() => void} requestUnlock
- * @property {() => boolean} hasJoinedOnce
+ * Configuration options for menu system
+ * @typedef {Object} MenusOptions - Options passed to initMenus
+ * @property {Record<string, HTMLElement|null>} panelById - Map of panel IDs to DOM elements
+ * @property {HTMLElement|null} chatBubble - Chat bubble for NPC dialogue
+ * @property {HTMLElement|null} questText - Quest objective text display
+ * @property {HTMLElement|null} pauseOverlay - Pause menu overlay
+ * @property {HTMLElement|null} blocker - Intro/blocker overlay
+ * @property {HTMLElement|null} interactHint - Interact prompt text
+ * @property {HTMLElement|null} weatherUnlockToast - Weather unlock notification
+ * @property {HTMLElement|null} weatherUnlockedCount - Count of unlocked weather types
+ * @property {HTMLElement|null} friendsList - Friends found list display
+ * @property {HTMLElement|null} friendsFoundCount - Count of friends found
+ * @property {HTMLButtonElement|null} weatherToggleButton - Button to show weather panel
+ * @property {HTMLButtonElement|null} friendsToggleButton - Button to show friends panel
+ * @property {HTMLButtonElement|null} settingsToggleButton - Button to show settings panel
+ * @property {HTMLButtonElement|null} helpToggleButton - Button to show help panel
+ * @property {HTMLButtonElement[]} closePanelButtons - Buttons that close all panels
+ * @property {() => void} requestRelock - Callback to re-engage pointer lock
+ * @property {() => void} requestUnlock - Callback to release pointer lock
+ * @property {() => boolean} hasJoinedOnce - Check if player has joined game
  */
 
 /**
- * Wires up all menu panel event listeners. Call once during init.
- * @param {MenusOptions} opts
+ * Initialize the menu system and wire up all panel event listeners.
+ * Should be called once during game startup after all UI elements are loaded.
+ * @param {MenusOptions} opts - Configuration object with all UI element references
  */
 export function initMenus(opts) {
-  _panelById = opts.panelById;
-  _chatBubble = opts.chatBubble;
-  _questText = opts.questText;
-  _pauseOverlay = opts.pauseOverlay;
-  _blocker = opts.blocker;
-  _interactHint = opts.interactHint;
-  _weatherUnlockToast = opts.weatherUnlockToast;
-  _weatherUnlockedCount = opts.weatherUnlockedCount;
-  _friendsList = opts.friendsList;
-  _friendsFoundCount = opts.friendsFoundCount;
-  _requestRelock = opts.requestRelock;
-  _requestUnlock = opts.requestUnlock;
+  // Store references to all UI elements for later access
+  _panelById = opts.panelById; // Map of panel IDs to DOM elements
+  _chatBubble = opts.chatBubble; // NPC dialogue display
+  _questText = opts.questText; // Quest objective text
+  _pauseOverlay = opts.pauseOverlay; // Pause menu
+  _blocker = opts.blocker; // Intro overlay
+  _interactHint = opts.interactHint; // Interact prompt
+  _weatherUnlockToast = opts.weatherUnlockToast; // Notification toast
+  _weatherUnlockedCount = opts.weatherUnlockedCount; // Unlocked weather count
+  _friendsList = opts.friendsList; // Friends found list
+  _friendsFoundCount = opts.friendsFoundCount; // Friends count badge
+  _requestRelock = opts.requestRelock; // Callback to relock controls
+  _requestUnlock = opts.requestUnlock; // Callback to unlock controls
 
   // Toggle buttons
   const { weatherToggleButton, friendsToggleButton, settingsToggleButton, helpToggleButton } = opts;

@@ -1,8 +1,22 @@
+/**
+ * PHYSICS & COLLISION SYSTEM
+ * 
+ * Handles all collision detection and physics simulation:
+ * - Player movement constraints and collision detection
+ * - Terrain and environment collision boundaries
+ * - Gravity and jumping mechanics
+ * - Support surface detection for proper ground physics
+ * 
+ * NOTE: GitHub Copilot assisted in creating the complex mathematical animations
+ * and physics calculations for accurate collision detection and movement.
+ */
+
 import * as THREE from 'three';
 import { scene } from './engine.js';
 
 // ---------------------------------------------------------------------------
 // Player collision constants
+// Defines physical dimensions and behavior of player character
 // ---------------------------------------------------------------------------
 export const PLAYER_HEIGHT = 1.6;
 export const PLAYER_COLLISION_RADIUS = 0.34;

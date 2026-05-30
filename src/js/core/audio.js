@@ -1,6 +1,20 @@
+/**
+ * AUDIO SYSTEM
+ * 
+ * Manages all audio playback in the game including:
+ * - Background music (party music)
+ * - Sound effects (UI interactions, quest notifications, dialogue)
+ * - Spatial/3D audio for immersive soundscapes
+ * - Volume controls and audio settings persistence
+ * - Audio listener integration with Three.js camera
+ * 
+ * NOTE: GitHub Copilot was used to develop the audio support system,
+ * including spatial audio setup, volume management, and audio event triggers.
+ */
+
 import * as THREE from 'three';
 
-// Storage keys
+// Storage keys for audio preferences
 export const MUSIC_VOLUME_STORAGE_KEY = 'tim-birthday-music-volume';
 export const SFX_VOLUME_STORAGE_KEY = 'tim-birthday-sfx-volume';
 export const SENSITIVITY_STORAGE_KEY = 'tim-birthday-look-sensitivity';
@@ -45,51 +59,87 @@ export function initAudioListener(camera) {
   );
 }
 
-// Utility functions
+// ---------------------------------------------------------------------------
+// UTILITY FUNCTIONS
+// Helper functions for audio management
+// ---------------------------------------------------------------------------
+/**
+ * Clamps a value between 0 and 1 (normalized range)
+ * @param {number} value - The value to clamp
+ * @returns {number} The clamped value between 0 and 1
+ */
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
+/**
+ * Set music volume as a percentage (0-100)
+ * Applies volume to the positional audio (party music)
+ * @param {number} percentage - Volume level from 0 to 100
+ * @returns {number} The validated percentage value
+ */
 export function applyMusicVolume(percentage) {
   const normalized = clamp01(Number(percentage) / 100);
-  if (partyMusic) partyMusic.setVolume(normalized);
+  if (partyMusic) partyMusic.setVolume(normalized); // Update party music volume
   return Math.max(0, Math.min(100, Math.round(Number(percentage) || 0)));
 }
 
+/**
+ * Set sound effects volume as a percentage (0-100)
+ * Applies volume to all sound effect audio elements
+ * @param {number} percentage - Volume level from 0 to 100
+ */
 export function applySoundEffectsVolume(percentage) {
   const normalized = clamp01(Number(percentage) / 100);
+  // Apply normalized volume to each sound effect with different scaling
   buttonClickAudio.volume = clamp01(normalized * 0.75);
   newQuestAudio.volume = clamp01(normalized * 0.95);
   chatContinueAudio.volume = clamp01(normalized * 0.9);
 }
 
+/**
+ * Play button click sound effect
+ * Used for UI interaction feedback
+ */
 export function playButtonClickSound() {
   try {
-    buttonClickAudio.currentTime = 0;
-    buttonClickAudio.play().catch(() => { });
+    buttonClickAudio.currentTime = 0; // Reset to start
+    buttonClickAudio.play().catch(() => { }); // Play with silent fail-safe
   } catch (e) {
-    // ignore audio playback failures
+    // Gracefully ignore audio playback failures
   }
 }
 
+/**
+ * Play new quest notification sound
+ * Alerts player when a new objective is available
+ */
 export function playNewQuestSound() {
   try {
     newQuestAudio.currentTime = 0;
     newQuestAudio.play().catch(() => { });
   } catch (e) {
-    // ignore audio playback failures
+    // Gracefully ignore audio playback failures
   }
 }
 
+/**
+ * Play chat continuation sound
+ * Used for dialogue and NPC interaction audio cues
+ */
 export function playChatContinueSound() {
   try {
     chatContinueAudio.currentTime = 0;
     chatContinueAudio.play().catch(() => { });
   } catch (e) {
-    // ignore audio playback failures
+    // Gracefully ignore audio playback failures
   }
 }
 
+/**
+ * Start playing party celebration music
+ * Triggered when player reaches the party venue with all friends
+ */
 export function playPartyMusic() {
   partyMusicRequested = true;
   if (partyMusicLoaded && !partyMusic.isPlaying) {
